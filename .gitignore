@@ -1,0 +1,12 @@
+# Ignorar el script de Python
+.SendToClaude.py
+
+# Ignorar la carpeta send
+.send/
+
+# Ignorar los enlaces precargados
+js/config/default.js
+js/config/default.affiliate.js
+
+# Ignorar la carpeta de imagenes para la extensión
+screenshots/

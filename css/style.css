@@ -1,0 +1,749 @@
+/* ============================
+   1. Font Faces
+   ============================ */
+   @font-face {
+    font-family: 'Segoe UI';
+    src: local('Segoe UI'), url('/img/segoeui.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'Segoe UI Light';
+    src: local('Segoe UI Light'), url('/img/segoeuil.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+  
+  /* ============================
+     2. Base Styles
+     ============================ */
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    overflow: hidden;
+    background-color: #dfe3e6;
+    font-family: "Segoe UI", "Meiryo UI", "Meiryo", "Microsoft YaHei UI", "Microsoft YaHei", 
+                 "Microsoft JhengHei UI", "Microsoft JhengHei", "Malgun Gothic", Ebrima, 
+                 "Khmer UI", Latha, "Nirmala UI", Tunga, "Lao UI", Lao, Leelawadee, 
+                 Verdana, Arial, Helvetica, sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  a {
+    text-decoration: none;
+  }
+  
+  /* ============================
+     3. Layout Structure
+     ============================ */
+  #main {
+    display: flex;
+    min-height: 100vh;
+  }
+  
+  #main-container {
+    margin-left: 10%;
+    width: 90%;
+    overflow-y: auto;
+    height: 100vh;
+    padding: 50px 100px 20px 20px;
+    box-sizing: border-box;
+  }
+  
+  /* Navigation Sidebar */
+  #navigation-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 10%;
+    max-width: 300px;
+    height: 100vh;
+    overflow-y: auto;
+    background-color: #fafafa;
+    color: black;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  
+  #navigation-container ul {
+    list-style-type: none;
+    padding: 0;
+  }
+  
+  #navigation-container li {
+    margin-bottom: 10px;
+  }
+  
+  #navigation-container a {
+    color: black;
+    display: block;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    font-size: 1rem;
+  }
+  
+  #navigation-container a:hover,
+  #navigation-container a.active {
+    background-color: #88bef7;
+  }
+  
+  /* Controls */
+  #controls {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* ============================
+     4. Cards
+     ============================ */
+  .card {
+    background-color: black;
+    color: #fff;
+    display: flex;
+    align-items: flex-end;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background-repeat: no-repeat;
+    box-shadow: 2px 8px 20px -8px rgba(0,0,0,0.3);
+    box-sizing: border-box;
+    padding: 10px;
+    font-size: 16px;
+    text-shadow: 0px 0px 8px black;
+    transition: transform .2s, box-shadow .2s;
+  }
+  
+  .card:hover {
+    transform: scale(1.05);
+    box-shadow: 2px 8px 20px -8px rgba(0,0,0,0.5);
+  }
+  
+  .card-small {
+    grid-column: span 1;
+    aspect-ratio: 1 / 1;
+    min-height: 120px;
+  }
+  
+  .card-wide {
+    grid-column: span 2;
+    min-height: 120px;
+  }
+  
+  .card-big {
+    grid-column: span 2;
+    grid-row: span 2;
+    min-height: 250px;
+  }
+
+  .card-preview-container {
+    width: 100%;
+    height: 260px;
+    padding: 20px 22px 20px 8px;
+    /*background: #eee;*/
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+  }
+
+  #card-preview {
+    position: relative;
+    /*transform-origin: center;
+    transform: scale(0.8);*/
+    transition: all 0.3s ease;
+    margin: 0;
+  }
+  
+  #card-preview.card-small {
+    width: 120px;
+    height: 120px;
+  }
+  
+  #card-preview.card-wide {
+    width: 240px;
+    height: 120px;
+  }
+  
+  #card-preview.card-big {
+    width: 240px;
+    height: 240px;
+  }
+
+  .section-select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #333;
+    background-color: white;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+  }
+  
+  /* ============================
+     5. Wrappers & Containers
+     ============================ */
+  .wrapper {
+    background-color: #fafafa;
+    width: 100%;
+    margin-bottom: 20px;
+    box-shadow: 2px 8px 20px -8px rgba(0,0,0,0.3);
+    border-radius: 0.75rem;
+    overflow: hidden;
+  }
+  
+  .container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    padding: 10px 10px 20px 10px;
+  }
+  
+  @media (max-width: 1500px) {
+    .container {
+      grid-template-columns: repeat(6, 1fr);
+    }
+  }
+  
+  @media (max-width: 1000px) {
+    .container {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  
+  /* ============================
+     6. Sections
+     ============================ */
+  section {
+    border-radius: .75rem;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  
+  .section-header {
+    padding: 10px 0px 10px 20px;
+    font-size: 26px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+  
+  .section-content {
+    padding: 4px 40px;
+    transition: max-height 0.3s ease-out;
+    overflow: hidden;
+    max-height: 0;
+  }
+  
+  .section-content.show {
+    max-height: none;
+  }
+  
+  .section-content:not(.show) {
+    transition: max-height 0.3s ease-out;
+  }
+
+  .toggle-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    transition: transform 0.3s ease-out;
+    width: 24px;
+    height: 24px;
+}
+
+.toggle-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.toggle-icon .icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+  
+  /* ============================
+     7. Buttons
+     ============================ */
+  /* Add Button Base Styles */
+  .add-btn {
+    position: fixed;
+    right: 38px;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    z-index: 1000;
+    transition: 0.2s;
+    background-color: #007bff;
+  }
+  
+  .add-btn:hover {
+    width: 240px;
+    border-radius: 10px;
+    font-size: 24px;
+    transition: width 0.4s;
+  }
+  
+  .add-btn span {
+    max-width: 0;
+    display: inline-block;
+    vertical-align: top;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: max-width 0.1s;
+  }
+  
+  .add-btn:hover span {
+    max-width: 17rem;
+    margin-left: 5px;
+    transition: max-width 1s;
+  }
+  
+  /* Button Positions */
+  .add-card-btn {
+    top: 20px;
+  }
+  
+  .add-wrapper-btn {
+    top: 80px;
+  }
+  
+  .export-btn {
+    top: 200px;
+  }
+  
+  .import-btn {
+    top: 140px;
+  }
+  
+  .settings-btn {
+    bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+  
+  /* Form Buttons */
+  .btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  .btn:hover {
+    background-color: #0056b3;
+  }
+  
+  .btn-danger {
+    background-color: #ff4d4d;
+    width: 20%;
+    margin-right: 10px;
+  }
+  
+  .btn-danger:hover {
+    background-color: #d93636;
+  }
+  
+  /* Card Size Controls */
+  #card-size-buttons {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .btn-card-size {
+    flex: 1;
+    padding: 12px;
+    margin: 0 5px;
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s;
+  }
+  
+  .btn-card-size.selected {
+    background-color: #007bff;
+    color: white;
+    transform: scale(1.05);
+  }
+  
+  .btn-card-size:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .btn-card-size:active {
+    transform: scale(0.95);
+  }
+
+  .btn-card-save{
+    max-width: 500px;
+  }
+
+  .btn-image-reset {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    background: white;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+  
+  .btn-image-reset:hover {
+    background-color: #f0f0f0;
+    border-color: #999;
+  }
+  
+  .btn-image-reset svg {
+    width: 100%;
+    height: 100%;
+  }
+  
+  
+  .btn-link-reset {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    background: white;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+  
+  .btn-link-reset:hover {
+    background-color: #f0f0f0;
+    border-color: #999;
+  }
+  
+  .btn-link-reset svg {
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* Image Position Controls */
+  .position-control-container {
+    display: flex;
+    align-items: normal;
+    gap: 30px;
+  }
+  
+  .position-values {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.8rem;
+  }
+  
+  .image-position-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-right: 50px;
+    margin-left: auto
+  }
+  
+  .middle-buttons {
+    display: flex;
+    gap: 3px;
+  }
+  
+  .btn-image-position {
+    width: 50px;
+    height: 36px;
+    font-size: 18px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 4px 2px;
+  }
+  
+  .btn-image-position:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .btn-image-position:active {
+    background-color: #d0d0d0;
+  }
+
+  .btn-visibility .icon-visible {
+    display: none;
+  }
+  
+  .btn-visibility .icon-hidden {
+    display: block;
+  }
+  
+  .btn-visibility.active .icon-visible {
+    display: block;
+  }
+  
+  .btn-visibility.active .icon-hidden {
+    display: none;
+  }
+  
+  .input-with-button {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .input-with-button .form-control {
+    flex-grow: 1;
+  }
+
+  .btn-visibility {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    background: white;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+  
+  .btn-visibility:hover {
+    background-color: #f0f0f0;
+    border-color: #999;
+  }
+  
+  .btn-visibility.active {
+    background-color: #e6f3ff;
+    border-color: #1a73e8;
+    color: #1a73e8;
+  }
+  
+  
+  /* ============================
+     8. Forms & Popups
+     ============================ */
+  .popup-form {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+  }
+  
+  .popup-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #f9f9f9;
+    padding: 30px;
+    border-radius: 15px;
+    width: 800px;
+    max-width: 90vw;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .popup-content-small {
+    width: 400px !important;
+    max-width: 90vw;
+    padding: 30px;
+  }
+  
+  .close-popup {
+    position: absolute;
+    top: 10px;
+    right: 5px;
+    cursor: pointer;
+    font-size: 24px;
+    color: #333;
+    padding: 1px 22px 5px 22px;
+    text-align: center;
+    border-radius: 100%;
+  }
+  
+  .close-popup:hover {
+    background-color: #ccc;
+    border-radius: 15px;
+  }
+  
+  /* Form Layout */
+  .form-two-columns {
+    display: flex;
+    gap: 30px;
+    margin: 20px 0;
+  }
+  
+  .form-column {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #333;
+    font-size: 1rem;
+  }
+  
+  .form-group-color {
+    display: flex;
+    padding: 10px;
+  }
+  
+  .form-group-slider {
+    display: flex;
+  }
+  
+  .form-group-slider input {
+    width: 80%;
+  }
+  
+  .form-group-slider span {
+    font-size: 150%; 
+    width: 10%;
+    padding-left: 10px;
+  }
+  
+  #form-main-buttons,
+  #form-wrapper-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0;
+  }
+  
+  #form-main-buttons.single-button,
+  #form-wrapper-buttons.single-button {
+    margin-left: auto;
+    max-width: 500px;
+  }
+
+  .btn-wrapper-save{
+    max-width: 500px;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+    margin-bottom: 5px;
+    box-sizing: border-box;
+  }
+  
+  .form-control:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.3);
+  }
+  
+  /* Settings Form Specific */
+  .settings-section {
+    margin-bottom: 20px;
+  }
+  
+  .settings-select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #333;
+    background-color: white;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+  }
+ 
+  .settings-select:hover {
+    border-color: #007bff;
+  }
+  
+  .settings-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+  }
+  
+  /* ============================
+     9. Utilities
+     ============================ */
+  .icon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+  
+  .icon-stroke {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2px;
+  }
+  
+  /* ============================
+     10. Responsive Design
+     ============================ */
+  @media (max-width: 768px) {
+    .form-two-columns {
+      flex-direction: column;
+      gap: 15px;
+    }
+  
+    .popup-content {
+      width: 95vw;
+      padding: 20px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .popup-content-small {
+      width: 90% !important;
+      padding: 20px;
+    }
+    
+    .settings-select {
+      padding: 10px;
+    }
+    
+    .settings-title {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+  }
+

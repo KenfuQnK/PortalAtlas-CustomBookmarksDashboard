@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Atlas</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="controls">
+		<button id="add-card-btn" class="add-btn add-card-btn" data-i18n-title="add_card_tooltip">
+            <svg class="icon"><use href="icons/sprites.svg#icon-add-card"/></svg>
+    		<span data-i18n="add_card">Add card</span>
+		</button>
+        <button id="add-wrapper-btn" class="add-btn add-wrapper-btn" data-i18n-title="add_section_tooltip">
+            <svg class="icon"><use href="icons/sprites.svg#icon-add-folder"/></svg>
+			<span data-i18n="add_section">Add section</span>
+		</button>        
+        <button id="import-btn" class="add-btn import-btn" data-i18n-title="import_tooltip">
+            <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-import"/></svg>
+			<span data-i18n="import">Import</span>
+		</button>
+        <input type="file" id="importFile" style="display: none;">
+        <button id="export-btn" class="add-btn export-btn" data-i18n-title="export_tooltip">
+            <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-export"/></svg>
+			<span data-i18n="export">Export</span>
+		</button>
+        <button id="settings-btn" class="add-btn settings-btn" data-i18n-title="settings_tooltip">
+            <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-settings"/></svg>
+            <span data-i18n="settings">Settings</span>
+        </button>
+    </div>
+
+    <div id="main">
+		<div id="navigation-container">
+			<h2 data-i18n="sections">Sections</h2>
+			<ul id="nav-list"></ul>
+		</div>
+		<div id="main-container"></div>
+	</div>
+
+    <div id="popup-form-card" class="popup-form">
+        <div class="popup-content">
+            <span id="close-popup-card" class="close-popup" data-i18n-title="close">×</span>
+            <form id="new-card-form">
+                <input type="hidden" id="card-id">
+                <div class="form-two-columns">
+                    <!-- Left column -->
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label for="card-name" data-i18n="title">Title:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="card-name" class="form-control" data-i18n-placeholder="title" required>
+                                <button type="button" class="btn-visibility active" data-i18n-title="toggle_name_visibility">
+                                    <svg class="icon icon-stroke icon-visible"><use href="icons/sprites.svg#icon-eye"/></svg>
+                                    <svg class="icon icon-stroke icon-hidden"><use href="icons/sprites.svg#icon-eye-off"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-link" data-i18n="link">Link:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="card-link" class="form-control" data-i18n-placeholder="link">
+                                <button type="button" id="reset-link-btn" class="btn-link-reset" data-i18n-title="reset_link">
+                                    <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-reset"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-wrapper" data-i18n="section">Section:</label>
+                            <select id="card-wrapper" class="form-control section-select" required>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="preview">Preview:</label>
+                            <div class="card-preview-container">
+                                <div id="card-preview" class="card card-small" data-i18n="preview">Preview</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right column -->
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label data-i18n="size">Size:</label>
+                            <div id="card-size-buttons">
+                                <button type="button" class="btn-card-size" data-size="card-small" data-i18n="size_small">Small</button>
+                                <button type="button" class="btn-card-size" data-size="card-wide" data-i18n="size_wide">Wide</button>
+                                <button type="button" class="btn-card-size" data-size="card-big" data-i18n="size_big">Big</button>
+                            </div>
+                            <input type="hidden" id="card-size" value="card-small">
+                        </div>
+                        <div class="form-group">
+                            <label for="card-background-image" data-i18n="background_image">Background image:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="card-background-image" class="form-control">
+                                <button type="button" id="reset-image-btn" class="btn-image-reset" data-i18n-title="reset_image">
+                                    <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-reset"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-background-size" data-i18n="background_size">Image size:</label>
+                            <div class="form-group-slider">
+                                <input type="range" id="card-background-size" class="slider" min="0" max="300" step="5" value="100">
+                                <span id="card-background-size-value">100%</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-background-color" data-i18n="background_color">Background color:</label>
+                            <div class="form-group-color">
+                                <input type="color" id="card-background-color" value="#000000">
+                            </div>
+                        </div>
+                        <div class="form-group position-group">
+                            <label for="card-background-position" data-i18n="adjust_image_position">Adjust image position:</label>
+                            <div class="position-control-container">
+                                <div class="position-values">
+                                    <div><span data-i18n="horizontal">Horizontal</span>: <span class="horizontal-value">50</span>%</div>
+                                    <div><span data-i18n="vertical">Vertical</span>: <span class="vertical-value">50</span>%</div>
+                                </div>
+                                <div class="image-position-buttons">
+                                    <button type="button" class="btn-image-position up-button" data-direction="up" data-i18n-title="move_up">↑</button>
+                                    <div class="middle-buttons">
+                                        <button type="button" class="btn-image-position left-button" data-direction="left" data-i18n-title="move_left">←</button>
+                                        <button type="button" class="btn-image-position right-button" data-direction="right" data-i18n-title="move_right">→</button>
+                                    </div>
+                                    <button type="button" class="btn-image-position down-button" data-direction="down" data-i18n-title="move_down">↓</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        
+                <div class="form-group" id="form-main-buttons">
+                    <button type="button" id="delete-card-btn" class="btn btn-danger" data-i18n="delete">Delete</button>
+                    <button type="submit" class="btn btn-card-save" data-i18n="save">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="popup-form-wrapper" class="popup-form">
+        <div class="popup-content">
+            <span id="close-popup-wrapper" class="close-popup" data-i18n-title="close">×</span>
+            <form id="new-wrapper-form">
+                <input type="hidden" id="wrapper-id">
+                <div class="form-group">
+                    <label for="wrapper-name" data-i18n="new_section_name">New section name:</label>
+                    <input type="text" id="wrapper-name" class="form-control" required>
+                </div>
+                <div class="form-group" id="form-wrapper-buttons">
+                    <button type="button" id="delete-wrapper-btn" class="btn btn-danger" data-i18n="delete">Delete</button>
+                    <button type="submit" class="btn btn-wrapper-save" data-i18n="accept">Accept</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="popup-form-settings" class="popup-form">
+        <div class="popup-content popup-content-small">
+            <span id="close-popup-settings" class="close-popup" data-i18n-title="close">×</span>
+            <h2 class="settings-title" data-i18n="settings">Settings</h2>
+            <div class="settings-section">
+                <label for="language-selector" data-i18n="language">Language:</label>
+                <select id="language-selector" class="settings-select">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- First load the configurations and utilities -->
+    <script src="js/config/config.js"></script>
+    <script src="js/core/utils.js"></script>
+
+    <!-- Load default data -->
+    <script src="js/config/default.js"></script>
+
+    <!-- Load the core -->
+    <script src="js/core/storage.js"></script>
+    <script src="js/core/dataManager.js"></script>
+
+    <!-- Load the UI -->
+    <script src="js/ui/cards.js"></script>
+    <script src="js/ui/cardForm.js"></script>
+    <script src="js/ui/wrappers.js"></script>
+    <script src="js/ui/wrapperForm.js"></script>
+    <script src="js/ui/navigation.js"></script>
+    <script src="js/ui/sortable.js"></script>
+    <script src="js/ui/settings.js"></script>
+
+    <!-- Load the services -->
+    <script src="js/services/importExport.js"></script>
+    <script src="js/services/i18n.js"></script>
+
+    <!-- Finally, load the initialization -->
+    <script src="js/init.js"></script>
+
+    
+</body>
+</html>
