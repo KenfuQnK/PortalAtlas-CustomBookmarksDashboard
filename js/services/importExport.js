@@ -47,10 +47,24 @@ async function importData(event) {
                 });
 
                 if (importedData.cards && importedData.wrappers) { // Check if the data structure is valid
+                                       // Process cards to ensure base64 images
+                                       const processedCards = await Promise.all(importedData.cards.map(async (card) => {
+                                        if (!card.backgroundImageBase64 && card.backgroundImage) {
+                                            try {
+                                                const imageUrl = card.backgroundImage.replace(/^url\(['"]?|['"]?\)$/g, '');
+                                                card.backgroundImageBase64 = await convertImageToBase64(imageUrl);
+                                            } catch (error) {
+                                                console.warn(`Failed to generate base64 for card ${card.id}:`, error);
+                                            }
+                                        }
+                                        return card;
+                                    }));
+
                     // First, save the cards using chrome.storage.local
                     try {
                         await new Promise((resolve, reject) => {
-                            chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.CARDS] : importedData.cards }, () => {
+                            //chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.CARDS] : importedData.cards }, () => {
+                            chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.CARDS] : processedCards }, () => {
                                 if (chrome.runtime.lastError) {
                                     console.error('Error saving cards:', chrome.runtime.lastError); // Log error if saving fails
                                     reject(chrome.runtime.lastError); // Reject the promise on error

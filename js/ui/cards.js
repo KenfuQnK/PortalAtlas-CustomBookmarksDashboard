@@ -84,9 +84,21 @@ async function updateCardOrder() {
 }
 
 function preloadAndSwitchImage(element, originalUrl) {
+    if (!originalUrl || !element) return;
+
     const img = new Image(); // Create a new image element for preloading
+    let switched = false;
+    
+    const timeoutDuration = 5000; // 5 seconds timeout
+    const timeout = setTimeout(() => {
+        if (!switched) {
+            console.warn('Image load timeout:', originalUrl);
+        }
+    }, timeoutDuration);
     
     img.onload = function() {
+        clearTimeout(timeout);
+        switched = true;
         // Add a smooth transition for the image switch
         element.style.transition = 'background-image 0.3s ease-in-out'; // Set the transition effect
         element.style.backgroundImage = `url(${originalUrl})`; // Switch to the original image
@@ -95,6 +107,13 @@ function preloadAndSwitchImage(element, originalUrl) {
         setTimeout(() => {
             element.style.transition = ''; // Reset the transition property
         }, 300);
+    };
+
+    // Keep the base64 version if original fails to load
+    img.onerror = function() {
+        clearTimeout(timeout);
+        console.warn('Failed to load image:', originalUrl);
+        
     };
     
     img.src = originalUrl; // Start loading the original image
