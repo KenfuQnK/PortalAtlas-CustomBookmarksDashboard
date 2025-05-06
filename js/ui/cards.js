@@ -92,7 +92,7 @@ function preloadAndSwitchImage(element, originalUrl) {
     const timeoutDuration = 5000; // 5 seconds timeout
     const timeout = setTimeout(() => {
         if (!switched) {
-            console.warn('Image load timeout:', originalUrl);
+            //console.warn('Image load timeout:', originalUrl);
         }
     }, timeoutDuration);
     
@@ -112,8 +112,7 @@ function preloadAndSwitchImage(element, originalUrl) {
     // Keep the base64 version if original fails to load
     img.onerror = function() {
         clearTimeout(timeout);
-        console.warn('Failed to load image:', originalUrl);
-        
+        console.warn('Failed to load image:', originalUrl);        
     };
     
     img.src = originalUrl; // Start loading the original image

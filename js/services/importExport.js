@@ -47,18 +47,18 @@ async function importData(event) {
                 });
 
                 if (importedData.cards && importedData.wrappers) { // Check if the data structure is valid
-                                       // Process cards to ensure base64 images
-                                       const processedCards = await Promise.all(importedData.cards.map(async (card) => {
-                                        if (!card.backgroundImageBase64 && card.backgroundImage) {
-                                            try {
-                                                const imageUrl = card.backgroundImage.replace(/^url\(['"]?|['"]?\)$/g, '');
-                                                card.backgroundImageBase64 = await convertImageToBase64(imageUrl);
-                                            } catch (error) {
-                                                console.warn(`Failed to generate base64 for card ${card.id}:`, error);
-                                            }
-                                        }
-                                        return card;
-                                    }));
+                    // Process cards to ensure base64 images
+                    const processedCards = await Promise.all(importedData.cards.map(async (card) => {
+                        if (!card.backgroundImageBase64 && card.backgroundImage) {
+                            try {
+                                const imageUrl = card.backgroundImage.replace(/^url\(['"]?|['"]?\)$/g, '');
+                                card.backgroundImageBase64 = await convertImageToBase64(imageUrl);
+                            } catch (error) {
+                                console.warn(`Failed to generate base64 for card ${card.id}:`, error);
+                            }
+                        }
+                        return card;
+                    }));
 
                     // First, save the cards using chrome.storage.local
                     try {
