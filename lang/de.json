@@ -40,5 +40,13 @@
     "move_up": "Nach oben",
     "move_down": "Nach unten",
     "move_left": "Nach links",
-    "move_right": "Nach rechts"
+    "move_right": "Nach rechts",
+    "select_local_image": "Bild von diesem Computer auswählen",
+    "local_image_selected": "Lokales Bild ausgewählt (in Sicherungen enthalten)",
+    "local_image_missing": "Dieses lokale Bild ist auf diesem Gerät nicht verfügbar. Importiere eine vollständige Sicherung oder wähle es erneut aus.",
+    "invalid_image": "Die ausgewählte Datei ist kein gültiges Bild.",
+    "save_card_error": "Die Karte konnte nicht gespeichert werden. Bitte erneut versuchen.",
+    "export_error": "Die Sicherung konnte nicht erstellt werden.",
+    "import_error": "Die Sicherung ist ungültig oder konnte nicht importiert werden.",
+    "import_success": "Daten erfolgreich importiert."
 }

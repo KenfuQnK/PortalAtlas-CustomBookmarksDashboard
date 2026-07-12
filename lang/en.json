@@ -40,5 +40,13 @@
     "move_up": "Move up",
     "move_down": "Move down",
     "move_left": "Move left",
-    "move_right": "Move right"
+    "move_right": "Move right",
+    "select_local_image": "Choose an image from this computer",
+    "local_image_selected": "Local image selected (included in backups)",
+    "local_image_missing": "This local image is not available on this device. Import a full backup or select it again.",
+    "invalid_image": "The selected file is not a valid image.",
+    "save_card_error": "The card could not be saved. Please try again.",
+    "export_error": "The backup could not be created.",
+    "import_error": "The backup is invalid or could not be imported.",
+    "import_success": "Data imported successfully."
 }

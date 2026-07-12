@@ -43,7 +43,8 @@ Available in multiple languages:
 
 ## 💾 Data Management
 
-- Local storage of your configuration
+- Automatic Chrome Sync for cards, sections and settings
+- Optimized local image storage with lazy loading
 - Export your layout for backup
 - Import layout to restore or transfer your setup
 
@@ -52,8 +53,8 @@ Available in multiple languages:
 - **Increased Productivity:** Quick access to your most important websites
 - **Visual Organization:** Easy recognition of bookmarks through visual cues  
 - **Personalization:** Make your new tab page truly yours  
-- **Cross-device Sync:** Keep your setup consistent across all your devices  
-- **Backup & Restore:** Never lose your carefully crafted layout  
+- **Cross-device Sync:** Keep cards, sections, order and URL images consistent across Chrome devices
+- **Backup & Restore:** Transfer the complete dashboard, including local images, in one backup file
 
 ## 📱 Usage
 
@@ -68,7 +69,7 @@ Available in multiple languages:
 **Transform your browsing experience with Portal Atlas - where functionality meets creativity on your new tab page.**
 
 
-_Note: Portal Atlas does not collect or transmit any personal information. All data is stored locally on your device or in your Chrome sync storage if you're signed into Chrome._
+_Note: Portal Atlas itself does not collect your data. Metadata is kept locally and, when Chrome Sync is enabled, synchronized by Chrome; remote card images are requested from their source websites._
 ___
 
 Do you love the extension? Do you want to invite me a coffe?

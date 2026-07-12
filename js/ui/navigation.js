@@ -1,14 +1,15 @@
 // Function to initialize the script
 async function initNavigation() {
     await updateNavigationMenu();
-    
-    // Mutation observer to update the menu when content changes
     const mainContainer = document.getElementById('main-container');
-    const observer = new MutationObserver(updateNavigationMenu);
-    observer.observe(mainContainer, { childList: true, subtree: true });
-
-    // Add scroll event to update the active section
-    mainContainer.addEventListener('scroll', updateActiveSection);
+    let scrollFrame = null;
+    mainContainer.addEventListener('scroll', () => {
+        if (scrollFrame !== null) return;
+        scrollFrame = requestAnimationFrame(() => {
+            scrollFrame = null;
+            updateActiveSection();
+        });
+    }, { passive: true });
 }
 
 // Function to update the list of sections in the navigation menu
@@ -40,7 +41,7 @@ async function updateNavigationMenu() {
 // Function to scroll to a specific section
 function scrollToSection(sectionId) {
     const section = document.getElementById(sectionId);
-    section.scrollIntoView({ behavior: 'smooth' });
+    section?.scrollIntoView({ behavior: 'smooth' });
 }
 
 // Update the navigation menu after rendering the wrappers
@@ -91,7 +92,7 @@ function updateActiveSection() {
 
         if (scrollPosition >= wrapperTop && scrollPosition < wrapperTop + wrapperHeight) {
             navLinks.forEach(link => link.classList.remove('active'));
-            navLinks[index].classList.add('active');
+            navLinks[index]?.classList.add('active');
         }
     });
 }

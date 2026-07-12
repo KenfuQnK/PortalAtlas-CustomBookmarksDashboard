@@ -40,5 +40,13 @@
     "move_up": "Déplacer vers le haut",
     "move_down": "Déplacer vers le bas",
     "move_left": "Déplacer vers la gauche",
-    "move_right": "Déplacer vers la droite"
+    "move_right": "Déplacer vers la droite",
+    "select_local_image": "Choisir une image sur cet ordinateur",
+    "local_image_selected": "Image locale sélectionnée (incluse dans les sauvegardes)",
+    "local_image_missing": "Cette image locale n'est pas disponible sur cet appareil. Importez une sauvegarde complète ou sélectionnez-la à nouveau.",
+    "invalid_image": "Le fichier sélectionné n'est pas une image valide.",
+    "save_card_error": "La carte n'a pas pu être enregistrée. Réessayez.",
+    "export_error": "La sauvegarde n'a pas pu être créée.",
+    "import_error": "La sauvegarde est invalide ou n'a pas pu être importée.",
+    "import_success": "Données importées avec succès."
 }

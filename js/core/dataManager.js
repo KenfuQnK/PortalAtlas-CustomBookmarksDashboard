@@ -8,6 +8,7 @@ const dataManager = {
             // Here we need to maintain the original order
             const originalOrder = cards[existingCardIndex].order; // Preserve the original order of the card
             cards[existingCardIndex] = {
+                ...cards[existingCardIndex],
                 ...cardData,
                 order: originalOrder // Assign the original order to the updated card
             };
@@ -39,9 +40,14 @@ const dataManager = {
         const existingWrapperIndex = wrappers.findIndex(wrapper => wrapper.id === wrapperData.id); // Find the index of the existing wrapper by ID
         
         if (existingWrapperIndex !== -1) {
-            wrappers[existingWrapperIndex] = wrapperData; // Update the existing wrapper with new data
+            wrappers[existingWrapperIndex] = {
+                ...wrappers[existingWrapperIndex],
+                ...wrapperData,
+                order: wrappers[existingWrapperIndex].order
+            }; // Update the existing wrapper without moving it
         } else {
-            wrappers.push(wrapperData); // Add the new wrapper to the list
+            const maxOrder = Math.max(...wrappers.map(wrapper => Number(wrapper.order) || 0), -1);
+            wrappers.push({ ...wrapperData, order: maxOrder + 1 }); // Add the new wrapper at the end
         }
         
         await storage.set(CONFIG.STORAGE_KEYS.WRAPPERS, wrappers); // Save the updated wrappers back to storage
@@ -75,11 +81,12 @@ const dataManager = {
     // Order Management
     async updateCardOrder(wrapperId, cardIds) {
         const cards = await storage.get(CONFIG.STORAGE_KEYS.CARDS); // Retrieve existing cards from storage
-        const updatedCards = cards.map(card => ({
+        const orderById = new Map(cardIds.map((id, index) => [id, index]));
+        const updatedCards = cards.map(card => orderById.has(card.id) ? ({
             ...card,
-            order: cardIds.indexOf(card.id), // Update the order based on the new card IDs
-            wrapperId: card.wrapperId === wrapperId ? wrapperId : card.wrapperId // Maintain the wrapper ID if it matches
-        }));
+            order: orderById.get(card.id),
+            wrapperId
+        }) : card);
         
         await storage.set(CONFIG.STORAGE_KEYS.CARDS, updatedCards); // Save the updated cards back to storage
     },

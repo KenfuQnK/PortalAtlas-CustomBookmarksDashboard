@@ -1,3 +1,6 @@
+let mainWrapperSortable = null;
+let cardSortables = [];
+
 // Wrapper functions
 function createWrapper(wrapperData, isExpanded) {
     const expanded = isExpanded || false; // Determine if the wrapper should be expanded
@@ -11,7 +14,8 @@ function createWrapper(wrapperData, isExpanded) {
     sectionHeader.innerHTML = `<span class="toggle-icon ${!expanded ? 'collapsed' : ''}">
         <svg class="svg-snoweb svg-theme-light" height="50" preserveaspectratio="xMidYMid meet" viewbox="0 -12 100 100" width="100" x="0" xmlns="http://www.w3.org/2000/svg" y="0">
             <path class="svg-fill-primary" d="M14.5,29.6a7.5,7.5,0,0,1,10.7,0L50,54.4,74.8,29.6A7.5,7.5,0,1,1,85.5,40.2L55.3,70.4a7.4,7.4,0,0,1-10.6,0L14.5,40.2A7.5,7.5,0,0,1,14.5,29.6Z" fill-rule="evenodd"></path>
-        </svg></span>${wrapperData.name}`; // Set the inner HTML with the wrapper name and toggle icon
+        </svg></span>`;
+    sectionHeader.appendChild(document.createTextNode(wrapperData.name));
 
     sectionHeader.onclick = () => toggleSection(wrapperData.id); // Add click event to toggle the section
 
@@ -39,9 +43,11 @@ function createWrapper(wrapperData, isExpanded) {
 
 async function renderWrappers() {
     const mainContainer = document.getElementById('main-container'); // Get the main container element
-    mainContainer.innerHTML = ''; // Clear existing content in the main container
+    destroySortables();
+    cardImageLoader.reset();
     const wrappers = await dataManager.getAllWrappers(); // Fetch all wrappers from the data manager
     const states = await dataManager.getWrapperStates(); // Fetch the states of the wrappers
+    const fragment = document.createDocumentFragment();
 
     wrappers
         .sort((a, b) => (a.order || 0) - (b.order || 0)) // Sort wrappers by order
@@ -49,8 +55,10 @@ async function renderWrappers() {
             // Check if this wrapper was expanded
             const isExpanded = Boolean(states[wrapperData.id]); // Determine if the wrapper should be expanded based on its state
             const wrapperElement = createWrapper(wrapperData, isExpanded); // Create the wrapper element
-            mainContainer.appendChild(wrapperElement); // Append the wrapper element to the main container
+            fragment.appendChild(wrapperElement); // Append the wrapper element to the main container
         });
+
+    mainContainer.replaceChildren(fragment);
 
     await renderCards(); // Render the cards within the wrappers
     setupSortable(); // Set up sortable functionality for the wrappers
@@ -147,15 +155,16 @@ function toggleSection(wrapperId) {
 
 // Setup Sortable
 function setupSortable() {
+    destroySortables();
     const mainContainer = document.getElementById('main-container'); // Get the main container element
-    new Sortable(mainContainer, { // Initialize Sortable on the main container
+    mainWrapperSortable = new Sortable(mainContainer, { // Initialize Sortable on the main container
         animation: 150, // Set animation duration
         handle: '.section-header', // Set the handle for dragging to the section header
         onEnd: updateWrapperOrder // Set the callback for when sorting ends
     });
 
     document.querySelectorAll('.container').forEach(container => { // For each container in the wrappers
-        new Sortable(container, { // Initialize Sortable on the container
+        const sortable = new Sortable(container, { // Initialize Sortable on the container
             animation: 150, // Set animation duration
             group: 'cards', // Set the group for card sorting
             onEnd: async (evt) => { // Set the callback for when sorting ends
@@ -167,7 +176,17 @@ function setupSortable() {
                 }
             }
         });
+        cardSortables.push(sortable);
     });
+}
+
+function destroySortables() {
+    if (mainWrapperSortable) {
+        mainWrapperSortable.destroy();
+        mainWrapperSortable = null;
+    }
+    cardSortables.forEach(sortable => sortable.destroy());
+    cardSortables = [];
 }
 
 // Update orders after sorting

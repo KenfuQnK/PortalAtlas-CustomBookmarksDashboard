@@ -40,5 +40,13 @@
     "move_up": "Mover arriba",
     "move_down": "Mover abajo",
     "move_left": "Mover izquierda",
-    "move_right": "Mover derecha"
+    "move_right": "Mover derecha",
+    "select_local_image": "Elegir una imagen de este equipo",
+    "local_image_selected": "Imagen local seleccionada (se incluirá en las copias)",
+    "local_image_missing": "Esta imagen local no está disponible en este dispositivo. Importa una copia completa o selecciónala de nuevo.",
+    "invalid_image": "El archivo seleccionado no es una imagen válida.",
+    "save_card_error": "No se ha podido guardar la tarjeta. Inténtalo de nuevo.",
+    "export_error": "No se ha podido crear la copia de seguridad.",
+    "import_error": "La copia no es válida o no se ha podido importar.",
+    "import_success": "Datos importados correctamente."
 }

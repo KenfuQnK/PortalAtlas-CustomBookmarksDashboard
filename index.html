@@ -94,10 +94,15 @@
                             <label for="card-background-image" data-i18n="background_image">Background image:</label>
                             <div class="input-with-button">
                                 <input type="text" id="card-background-image" class="form-control">
+                                <button type="button" id="select-image-file-btn" class="btn-image-file" data-i18n-title="select_local_image">
+                                    <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-import"/></svg>
+                                </button>
                                 <button type="button" id="reset-image-btn" class="btn-image-reset" data-i18n-title="reset_image">
                                     <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-reset"/></svg>
                                 </button>
+                                <input type="file" id="card-background-file" accept="image/*" hidden>
                             </div>
+                            <small id="local-image-status" class="local-image-status" aria-live="polite"></small>
                         </div>
                         <div class="form-group">
                             <label for="card-background-size" data-i18n="background_size">Image size:</label>
@@ -183,6 +188,7 @@
     <script src="js/config/default.js"></script>
 
     <!-- Load the core -->
+    <script src="js/core/mediaStorage.js"></script>
     <script src="js/core/storage.js"></script>
     <script src="js/core/dataManager.js"></script>
 

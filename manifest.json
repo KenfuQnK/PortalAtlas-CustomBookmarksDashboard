@@ -1,9 +1,10 @@
 {
     "manifest_version": 3,
     "name": "Portal Atlas",
-    "version": "1.1",
+    "version": "2.0.0",
     "description": "Custom Bookmarks Dashboard",
     "permissions": [
+      "downloads",
       "storage",
       "unlimitedStorage"
     ],

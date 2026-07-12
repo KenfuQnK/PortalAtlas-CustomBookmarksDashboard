@@ -402,9 +402,11 @@
     max-width: 500px;
   }
 
-  .btn-image-reset {
+  .btn-image-reset,
+  .btn-image-file {
     width: 40px;
     height: 40px;
+    flex: 0 0 40px;
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 8px;
@@ -413,14 +415,24 @@
     transition: background-color 0.2s, border-color 0.2s;
   }
   
-  .btn-image-reset:hover {
+  .btn-image-reset:hover,
+  .btn-image-file:hover {
     background-color: #f0f0f0;
     border-color: #999;
   }
   
-  .btn-image-reset svg {
+  .btn-image-reset svg,
+  .btn-image-file svg {
     width: 100%;
     height: 100%;
+  }
+
+  .local-image-status {
+    display: block;
+    min-height: 18px;
+    margin-top: 5px;
+    color: #52606d;
+    font-size: 13px;
   }
   
   
@@ -746,4 +758,3 @@
       margin-bottom: 20px;
     }
   }
-
