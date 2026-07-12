@@ -1,338 +1,364 @@
-// Card functions
-function createCard(cardData) {
-    const anchor = document.createElement("a"); // Create an anchor element for the card
-    anchor.className = `card ${cardData.size}`; // Set the class name for styling based on card size
-    anchor.id = cardData.id || generateUUID(); // Set the ID of the card or generate a new one
-    anchor.href = cardData.link; // Set the link for the card
-    anchor.textContent = cardData.showName !== false ? cardData.name : ' '; // Set the card name or empty space if not shown
-    
-    // Extract the clean original URL from the background image
-    const originalUrl = cardData.backgroundImage.replace(/^url\(['"]?|['"]?\)$/g, '');
-    
-    // If we have a base64 image, start with it for quick loading
-    if (cardData.backgroundImageBase64) {
-        anchor.style.backgroundImage = `url(${cardData.backgroundImageBase64})`; // Set the background image to the base64 version
-        
-        // Preload and transition to the original image
-        if (originalUrl) {
-            preloadAndSwitchImage(anchor, originalUrl); // Preload the original image and switch to it
-        }
-    } else if (originalUrl) {
-        // If no base64 image, use the original URL directly
-        anchor.style.backgroundImage = `url(${originalUrl})`; // Set the background image to the original URL
-    }
-    
-    // Apply other styles
-    anchor.style.backgroundSize = cardData.backgroundImageSize; // Set the background size
-    anchor.style.backgroundColor = cardData.backgroundColor; // Set the background color
-    
-    const [x, y] = (cardData.backgroundPosition || "50,50").split(','); // Get the background position values
-    anchor.style.backgroundPosition = `${x}% ${y}%`; // Set the background position
+const cardImageLoader = {
+    _observer: null,
+    _queue: [],
+    _active: 0,
+    _generation: 0,
+    _objectUrls: new Map(),
+    _remotePromises: new Map(),
+    _stats: { observed: 0, cacheHits: 0, remoteRequests: 0, maxConcurrent: 0 },
 
-    anchor.addEventListener('contextmenu', async function(event) {
-        event.preventDefault(); // Prevent the default context menu from appearing
-        await openEditPopup(cardData); // Open the edit popup for the card
+    reset() {
+        this._generation += 1;
+        this._observer?.disconnect();
+        this._observer = null;
+        // Let already queued requests finish populating the shared cache.
+        // Dropping them here would leave their deduplication promises pending
+        // forever when a card edit triggers a rerender.
+        this._objectUrls.forEach(url => URL.revokeObjectURL(url));
+        this._objectUrls.clear();
+        this._stats = { observed: 0, cacheHits: 0, remoteRequests: 0, maxConcurrent: 0 };
+    },
+
+    observe(element, card) {
+        this._stats.observed += 1;
+        const generation = this._generation;
+
+        if (!('IntersectionObserver' in window)) {
+            this._load(element, card, generation);
+            return;
+        }
+
+        if (!this._observer) {
+            const observerGeneration = this._generation;
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting || !entry.target.isConnected) return;
+                    observer.unobserve(entry.target);
+                    const observedCard = entry.target.__portalAtlasCard;
+                    this._load(entry.target, observedCard, observerGeneration);
+                });
+            }, {
+                root: document.getElementById('main-container'),
+                rootMargin: CONFIG.MEDIA.LAZY_ROOT_MARGIN,
+                threshold: 0.01
+            });
+            this._observer = observer;
+        }
+
+        element.__portalAtlasCard = card;
+        this._observer.observe(element);
+    },
+
+    async _load(element, card, generation) {
+        if (!element || !card || generation !== this._generation) return;
+
+        const mediaId = mediaStorage.getIdForCard(card);
+        let cachedRecord = null;
+        if (mediaId) {
+            try {
+                cachedRecord = await mediaStorage.get(mediaId);
+            } catch (error) {
+                console.warn('Unable to read cached card image:', error);
+            }
+        }
+
+        let localRevisionMatches = card.imageKind !== 'local'
+            || !card.imageRevision
+            || cachedRecord?.revision === card.imageRevision;
+        if (!localRevisionMatches) cachedRecord = null;
+
+        if (!cachedRecord && mediaId && typeof driveSync !== 'undefined') {
+            cachedRecord = await driveSync.restoreCardImage(card);
+            localRevisionMatches = card.imageKind !== 'local'
+                || !card.imageRevision
+                || cachedRecord?.revision === card.imageRevision;
+        }
+
+        if (cachedRecord?.blob && localRevisionMatches) {
+            this._stats.cacheHits += 1;
+            this._setBlobBackground(element, cachedRecord.qualityBlob || cachedRecord.blob, generation);
+        }
+
+        if (card.imageKind === 'local') {
+            if (!cachedRecord) {
+                element.classList.add('card-image-missing');
+                element.title = window.i18n.translate('local_image_missing');
+            }
+            return;
+        }
+
+        const remoteUrl = mediaStorage.normalizeUrl(card.backgroundImage);
+        if (!remoteUrl) return;
+
+        try {
+            const record = await this._enqueueRemote(remoteUrl);
+            if (generation === this._generation && element.isConnected) {
+                this._setBlobBackground(element, record.displayBlob || record.blob, generation);
+            }
+        } catch (error) {
+            // Some hosts prevent a fetch/canvas conversion even though a CSS
+            // background is displayable. Probe the original URL, but keep the
+            // existing Blob preview until the browser confirms it has loaded.
+            this._preloadRemoteBackground(element, remoteUrl, generation);
+            console.warn('Unable to cache remote image:', remoteUrl, error);
+        }
+    },
+
+    _enqueueRemote(url) {
+        const id = mediaStorage.remoteId(url);
+        if (this._remotePromises.has(id)) return this._remotePromises.get(id);
+
+        const promise = new Promise((resolve, reject) => {
+            this._queue.push({ url, resolve, reject });
+            this._drainQueue();
+        }).finally(() => {
+            this._remotePromises.delete(id);
+        });
+        this._remotePromises.set(id, promise);
+        return promise;
+    },
+
+    _drainQueue() {
+        while (this._active < CONFIG.MEDIA.LOAD_CONCURRENCY && this._queue.length > 0) {
+            const task = this._queue.shift();
+            this._active += 1;
+            this._stats.remoteRequests += 1;
+            this._stats.maxConcurrent = Math.max(this._stats.maxConcurrent, this._active);
+
+            mediaStorage.cacheRemoteImage(task.url)
+                .then(record => {
+                    if (record.contentChanged && typeof driveSync !== 'undefined') {
+                        driveSync.notifyLocalAssetChanged();
+                    }
+                    task.resolve(record);
+                }, task.reject)
+                .finally(() => {
+                    this._active -= 1;
+                    this._drainQueue();
+                });
+        }
+    },
+
+    _setBlobBackground(element, blob, generation) {
+        if (generation !== this._generation || !element.isConnected) return;
+        const previousUrl = this._objectUrls.get(element);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        const objectUrl = URL.createObjectURL(blob);
+        this._objectUrls.set(element, objectUrl);
+        element.style.backgroundImage = `url(${JSON.stringify(objectUrl)})`;
+        element.classList.remove('card-image-missing');
+        if (element.title === window.i18n.translate('local_image_missing')) element.removeAttribute('title');
+    },
+
+    _setRemoteBackground(element, remoteUrl, generation) {
+        if (generation !== this._generation || !element.isConnected) return;
+        const previousUrl = this._objectUrls.get(element);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        this._objectUrls.delete(element);
+        element.style.backgroundImage = `url(${JSON.stringify(remoteUrl)})`;
+    },
+
+    _preloadRemoteBackground(element, remoteUrl, generation) {
+        if (generation !== this._generation || !element.isConnected) return;
+        const probe = new Image();
+        probe.decoding = 'async';
+        probe.onload = () => {
+            this._setRemoteBackground(element, remoteUrl, generation);
+        };
+        probe.onerror = () => {
+            // Intentionally do nothing: the last valid Blob remains visible.
+        };
+        probe.src = remoteUrl;
+    },
+
+    getStats() {
+        return { ...this._stats, active: this._active, queued: this._queue.length };
+    }
+};
+
+function createCard(cardData) {
+    const anchor = document.createElement('a');
+    anchor.className = `card ${cardData.size}`;
+    anchor.id = cardData.id || generateUUID();
+    anchor.href = cardData.link;
+    anchor.textContent = cardData.showName !== false ? cardData.name : ' ';
+    anchor.style.backgroundSize = cardData.backgroundImageSize;
+    anchor.style.backgroundColor = cardData.backgroundColor;
+
+    const [x, y] = (cardData.backgroundPosition || '50,50').split(',');
+    anchor.style.backgroundPosition = `${x}% ${y}%`;
+
+    anchor.addEventListener('contextmenu', async event => {
+        event.preventDefault();
+        await openEditPopup(cardData);
     });
 
-    return anchor; // Return the constructed card element
+    cardImageLoader.observe(anchor, cardData);
+    return anchor;
 }
 
 async function renderCards() {
-    const wrappers = document.querySelectorAll('.wrapper'); // Select all wrapper elements
-    const cardsData = await dataManager.getAllCards(); // Fetch all card data
+    cardImageLoader.reset();
+    const wrappers = document.querySelectorAll('.wrapper');
+    const cardsData = await dataManager.getAllCards();
+    const cardsByWrapper = new Map();
+
+    cardsData.forEach(card => {
+        if (!cardsByWrapper.has(card.wrapperId)) cardsByWrapper.set(card.wrapperId, []);
+        cardsByWrapper.get(card.wrapperId).push(card);
+    });
 
     wrappers.forEach(wrapper => {
-        const container = wrapper.querySelector('.container'); // Get the container for cards within the wrapper
-        if (!container) {
-            return; // Exit if the container is not found
-        }
-        container.innerHTML = ''; // Clear existing cards in the container
-        
-        const cardsForWrapper = cardsData
-            .filter(card => card.wrapperId === wrapper.id); // Filter cards that belong to the current wrapper
-               
-        cardsForWrapper
-            .sort((a, b) => (a.order || 0) - (b.order || 0)) // Sort cards by order
-            .forEach(cardData => {
-                container.appendChild(createCard(cardData)); // Create and append each card to the container
-            });
+        const container = wrapper.querySelector('.container');
+        if (!container) return;
+
+        const fragment = document.createDocumentFragment();
+        const cards = cardsByWrapper.get(wrapper.id) || [];
+        cards.sort((left, right) => (left.order || 0) - (right.order || 0));
+        cards.forEach(card => fragment.appendChild(createCard(card)));
+        container.replaceChildren(fragment);
     });
 }
 
 async function updateCardOrder() {
-    const wrappers = document.querySelectorAll('.wrapper'); // Select all wrapper elements
-    const cards = await dataManager.getAllCards(); // Fetch all card data
-    const updatedCards = [...cards]; // Create a copy of the current cards
-    
-    for (const wrapper of wrappers) {
-        const wrapperId = wrapper.id; // Get the ID of the current wrapper
-        const cardElements = Array.from(wrapper.querySelectorAll('.card')); // Get all card elements within the wrapper
-        
-        cardElements.forEach((cardElement, index) => {
-            const cardIndex = updatedCards.findIndex(card => card.id === cardElement.id); // Find the index of the card in the updated cards
-            if (cardIndex !== -1) {
-                updatedCards[cardIndex] = {
-                    ...updatedCards[cardIndex],
-                    order: index, // Update the order of the card
-                    wrapperId: wrapperId // Update the wrapper ID for the card
-                };
-            }
+    const wrappers = document.querySelectorAll('.wrapper');
+    const cards = await dataManager.getAllCards();
+    const cardsById = new Map(cards.map(card => [card.id, card]));
+
+    wrappers.forEach(wrapper => {
+        wrapper.querySelectorAll('.card').forEach((cardElement, index) => {
+            const card = cardsById.get(cardElement.id);
+            if (!card) return;
+            card.order = index;
+            card.wrapperId = wrapper.id;
         });
-    }
-    
-    await storage.set(CONFIG.STORAGE_KEYS.CARDS, updatedCards); // Save the updated card order to storage
-}
-
-function preloadAndSwitchImage(element, originalUrl) {
-    if (!originalUrl || !element) return;
-
-    const img = new Image(); // Create a new image element for preloading
-    let switched = false;
-    
-    const timeoutDuration = 5000; // 5 seconds timeout
-    const timeout = setTimeout(() => {
-        if (!switched) {
-            //console.warn('Image load timeout:', originalUrl);
-        }
-    }, timeoutDuration);
-    
-    img.onload = function() {
-        clearTimeout(timeout);
-        switched = true;
-        // Add a smooth transition for the image switch
-        element.style.transition = 'background-image 0.3s ease-in-out'; // Set the transition effect
-        element.style.backgroundImage = `url(${originalUrl})`; // Switch to the original image
-        
-        // Clear the transition after a short time
-        setTimeout(() => {
-            element.style.transition = ''; // Reset the transition property
-        }, 300);
-    };
-
-    // Keep the base64 version if original fails to load
-    img.onerror = function() {
-        clearTimeout(timeout);
-        console.warn('Failed to load image:', originalUrl);        
-    };
-    
-    img.src = originalUrl; // Start loading the original image
-}
-
-// Function to convert an image URL to base64
-async function convertImageToBase64(imageUrl) {
-    if (!imageUrl) return null; // Return null if no image URL is provided
-    
-    const cleanUrl = imageUrl.replace(/^url\(['"]?|['"]?\)$/g, ''); // Clean the URL format
-    
-    return new Promise((resolve, reject) => {
-        const img = new Image(); // Create a new image element
-        img.crossOrigin = "Anonymous"; // Set cross-origin attribute for loading
-        
-        img.onload = function() {
-            const canvas = document.createElement('canvas'); // Create a canvas element
-            const ctx = canvas.getContext('2d'); // Get the 2D drawing context
-            
-            // Reduce size for the base64 version since it's temporary
-            let newWidth, newHeight;
-            const maxSize = 200; // Reduced size for the base64 version
-            
-            if (img.width > img.height) {
-                newWidth = Math.min(maxSize, img.width); // Set new width based on max size
-                newHeight = (newWidth * img.height) / img.width; // Calculate new height to maintain aspect ratio
-            } else {
-                newHeight = Math.min(maxSize, img.height); // Set new height based on max size
-                newWidth = (newHeight * img.width) / img.height; // Calculate new width to maintain aspect ratio
-            }
-            
-            canvas.width = newWidth; // Set canvas width
-            canvas.height = newHeight; // Set canvas height
-            
-            // Use a lower quality for the temporary base64
-            ctx.drawImage(img, 0, 0, newWidth, newHeight); // Draw the image on the canvas
-            const base64 = canvas.toDataURL('image/jpeg', 0.6); // Convert canvas to base64 format
-            resolve(base64); // Resolve the promise with the base64 string
-        };
-        
-        img.onerror = () => {
-            console.error('Error loading image:', cleanUrl); // Log error if loading fails
-            resolve(null); // Resolve with null on error
-        };
-        
-        img.src = cleanUrl; // Start loading the image
     });
-}
 
-// Function to reset the image to its original state
-async function resetImageToOriginal(cardId) {
-    if (!cardId) {
-        debug('No card ID provided'); // Log debug message if no card ID is provided
-        return; // Exit if no card ID is provided
-    }
-    
-    try {
-        const cards = await dataManager.getAllCards(); // Fetch all cards
-        const card = cards.find(card => card.id === cardId); // Find the card by ID
-    
-        if (card) {
-            // Instead of modifying and saving the card, we save the original values
-            const originalValues = {
-                backgroundImage: card.backgroundImage, // Store the original background image
-                backgroundImageBase64: card.backgroundImageBase64, // Store the original base64 image
-                backgroundImageSize: card.backgroundImageSize, // Store the original background image size
-                backgroundPosition: card.backgroundPosition // Store the original background position
-            };
-
-            // Update only the UI
-            const cardBackgroundImage = document.getElementById('card-background-image'); // Get the background image input
-            const cardBackgroundSize = document.getElementById('card-background-size'); // Get the background size input
-            const cardBackgroundSizeValue = document.getElementById('card-background-size-value'); // Get the background size value display
-            const cardBackgroundImagePosition = document.querySelector('.position-values'); // Get the position values display
-            
-            if (cardBackgroundImage) {
-                cardBackgroundImage.value = ''; // Clear the background image input
-                cardBackgroundImage.dataset.position = '50,50'; // Reset the position data attribute
-                cardBackgroundImage.style.backgroundPosition = '50% 50%'; // Reset the background position
-                
-                // Store the original values as data attributes for recovery if canceled
-                cardBackgroundImage.dataset.originalImage = originalValues.backgroundImage; // Store original image
-                cardBackgroundImage.dataset.originalBase64 = originalValues.backgroundImageBase64; // Store original base64 image
-                cardBackgroundImage.dataset.originalSize = originalValues.backgroundImageSize; // Store original size
-                cardBackgroundImage.dataset.originalPosition = originalValues.backgroundPosition; // Store original position
-            }
-            
-            if (cardBackgroundSize) {
-                cardBackgroundSize.value = 100; // Set default size value
-            }
-            
-            if (cardBackgroundSizeValue) {
-                cardBackgroundSizeValue.textContent = "100%"; // Display default size value
-            }
-            
-            if (cardBackgroundImagePosition) {
-                if (horizontalDiv && verticalDiv) {
-                    const horizontalText = window.i18n.translate('horizontal'); // Translate horizontal text
-                    const verticalText = window.i18n.translate('vertical'); // Translate vertical text
-                    horizontalDiv.textContent = `${horizontalText}: 50%`; // Set default horizontal text
-                    verticalDiv.textContent = `${verticalText}: 50%`; // Set default vertical text
-                }
-            }
-            
-            // Update the preview
-            updateCardPreview(); // Refresh the card preview
-            
-            debug('Image and values reset only in the UI'); // Log debug message
-        } else {
-            debug('Card not found with ID:', cardId); // Log debug message if card is not found
-        }
-    } catch (error) {
-        console.error('Error resetting image:', error); // Log error if resetting fails
-    }
+    await storage.set(CONFIG.STORAGE_KEYS.CARDS, [...cardsById.values()]);
 }
 
 function updateCardPreview() {
-    const preview = document.getElementById('card-preview'); // Get the card preview element
-    if (!preview) return; // Exit if the preview element is not found
+    const preview = document.getElementById('card-preview');
+    if (!preview) return;
 
-    const name = document.getElementById('card-name').value; // Get the card name from the input
-    const backgroundImage = document.getElementById('card-background-image').value; // Get the background image URL
-    const backgroundSize = document.getElementById('card-background-size').value; // Get the background size
-    const backgroundColor = document.getElementById('card-background-color').value; // Get the background color
-    const cardSize = document.getElementById('card-size').value; // Get the card size
-    const showName = document.querySelector('.btn-visibility').classList.contains('active'); // Check if the name should be shown
-    
-    // Update class and base dimensions
-    preview.className = `card ${cardSize}`; // Set the class for the preview based on card size
-    preview.textContent = showName ? (name || 'Preview') : ''; // Set the text content based on visibility
+    const name = document.getElementById('card-name').value;
+    const backgroundImage = document.getElementById('card-background-image').value;
+    const backgroundSize = document.getElementById('card-background-size').value;
+    const backgroundColor = document.getElementById('card-background-color').value;
+    const cardSize = document.getElementById('card-size').value;
+    const showName = document.querySelector('.btn-visibility').classList.contains('active');
+    const localPreviewUrl = typeof getCardFormPreviewUrl === 'function' ? getCardFormPreviewUrl() : '';
 
-    // Apply image and background size
-    if (backgroundImage) {
-        preview.style.backgroundImage = `url(${backgroundImage})`; // Set the background image
-        preview.style.backgroundSize = `${backgroundSize}%`; // Set the background size
+    preview.className = `card ${cardSize}`;
+    updateCardPreviewDimensions(preview, cardSize);
+    preview.textContent = showName ? (name || window.i18n.translate('preview')) : '';
+    preview.style.backgroundSize = `${backgroundSize}%`;
+    preview.style.backgroundColor = backgroundColor;
+
+    if (localPreviewUrl) {
+        preview.style.backgroundImage = `url(${JSON.stringify(localPreviewUrl)})`;
+    } else if (backgroundImage) {
+        preview.style.backgroundImage = `url(${JSON.stringify(backgroundImage)})`;
     } else {
-        preview.style.backgroundImage = 'none'; // Clear the background image if none is provided
+        preview.style.backgroundImage = 'none';
     }
-    
-    preview.style.backgroundColor = backgroundColor; // Set the background color
-    
-    // Update background position
-    const cardBackgroundImage = document.getElementById('card-background-image'); // Get the background image input
-    if (cardBackgroundImage && cardBackgroundImage.dataset.position) {
-        const [x, y] = cardBackgroundImage.dataset.position.split(',').map(Number); // Get the position values
-        preview.style.backgroundPosition = `${x}% ${y}%`; // Set the background position
+
+    const imageInput = document.getElementById('card-background-image');
+    const [x, y] = (imageInput.dataset.position || '50,50').split(',').map(Number);
+    preview.style.backgroundPosition = `${x}% ${y}%`;
+}
+
+function captureCardPreviewDimensions(cardId, cardSize) {
+    const preview = document.getElementById('card-preview');
+    const card = cardId ? document.getElementById(cardId) : null;
+    const bounds = card?.getBoundingClientRect();
+
+    if (!preview || !bounds || bounds.width <= 0 || bounds.height <= 0) {
+        clearCardPreviewDimensions();
+        return;
+    }
+
+    preview.dataset.sourceSize = cardSize || '';
+    preview.dataset.sourceAspectRatio = String(bounds.width / bounds.height);
+}
+
+function clearCardPreviewDimensions() {
+    const preview = document.getElementById('card-preview');
+    if (!preview) return;
+    delete preview.dataset.sourceSize;
+    delete preview.dataset.sourceAspectRatio;
+}
+
+function updateCardPreviewDimensions(preview, cardSize) {
+    const defaultRatios = {
+        'card-small': 1,
+        'card-wide': 2,
+        'card-big': 1
+    };
+    const capturedRatio = Number.parseFloat(preview.dataset.sourceAspectRatio);
+    const useCapturedRatio = preview.dataset.sourceSize === cardSize
+        && Number.isFinite(capturedRatio)
+        && capturedRatio > 0;
+    const ratio = useCapturedRatio ? capturedRatio : (defaultRatios[cardSize] || 1);
+    const maxWidth = 240;
+    const maxHeight = 240;
+
+    if (ratio >= 1) {
+        preview.style.width = `${maxWidth}px`;
+        preview.style.height = `${maxWidth / ratio}px`;
+    } else {
+        preview.style.width = `${maxHeight * ratio}px`;
+        preview.style.height = `${maxHeight}px`;
     }
 }
 
 function adjustImagePosition(direction) {
-    const cardBackgroundImage = document.getElementById('card-background-image'); // Get the background image input
-    const cardBackgroundPositionValue = document.querySelector('.position-values'); // Get the position values display
-    const backgroundSize = parseInt(document.getElementById('card-background-size').value); // Get the background size
+    const imageInput = document.getElementById('card-background-image');
+    const positionDisplay = document.querySelector('.position-values');
+    const backgroundSize = parseInt(document.getElementById('card-background-size').value, 10);
+    if (!imageInput || !positionDisplay) return;
 
-    if (!cardBackgroundImage || !cardBackgroundPositionValue) {
-        console.warn('Required elements not found for position adjustment'); // Log warning if elements are not found
-        return; // Exit if required elements are not found
-    }
-    
-    let [x, y] = cardBackgroundImage.dataset.position ? cardBackgroundImage.dataset.position.split(',').map(Number) : [50, 50]; // Get current position or default to 50%
-    debug("Received x:", x); // Log the current x position
-    debug("Received y:", y); // Log the current y position
+    let [x, y] = imageInput.dataset.position
+        ? imageInput.dataset.position.split(',').map(Number)
+        : [50, 50];
+    const step = 5;
+    const inverted = backgroundSize > 100;
 
-    // Adjust position
-    const step = 5; // Amount to move on each click
-    // Invert the direction if the size is greater than 100%
-    const invertY = backgroundSize > 100;
-    const invertX = backgroundSize > 100;
-    
-    switch(direction) {
+    switch (direction) {
         case 'up':
-            y = Math.max(0, y - (invertY ? -step : step)); // Move up
+            y = Math.max(0, y - (inverted ? -step : step));
             break;
         case 'right':
-            x = Math.min(100, x + (invertX ? -step : step)); // Move right
+            x = Math.min(100, x + (inverted ? -step : step));
             break;
         case 'down':
-            y = Math.min(100, y + (invertY ? -step : step)); // Move down
+            y = Math.min(100, y + (inverted ? -step : step));
             break;
         case 'left':
-            x = Math.max(0, x + (invertX ? step : -step)); // Move left
+            x = Math.max(0, x + (inverted ? step : -step));
             break;
     }
-    
-    cardBackgroundImage.dataset.position = `${x},${y}`; // Update the position data attribute
-    cardBackgroundImage.style.backgroundPosition = `${x}% ${y}%`; // Set the background position
-    // Update the text divs that show the position
-    const [horizontalDiv, verticalDiv] = cardBackgroundPositionValue.children; // Get the position value display elements
+
+    imageInput.dataset.position = `${x},${y}`;
+    const [horizontalDiv, verticalDiv] = positionDisplay.children;
     if (horizontalDiv && verticalDiv) {
-        const horizontalText = window.i18n.translate('horizontal'); // Get translated horizontal text
-        const verticalText = window.i18n.translate('vertical'); // Get translated vertical text
-        horizontalDiv.textContent = `${horizontalText}: ${x}%`; // Update horizontal position text
-        verticalDiv.textContent = `${verticalText}: ${y}%`; // Update vertical position text
+        horizontalDiv.textContent = `${window.i18n.translate('horizontal')}: ${x}%`;
+        verticalDiv.textContent = `${window.i18n.translate('vertical')}: ${y}%`;
     }
-
-    const preview = document.getElementById('card-preview'); // Get the card preview element
-    if (preview) {
-        preview.style.backgroundPosition = `${x}% ${y}%`; // Update the preview background position
-    }
-
-    updateCardPreview(); // Refresh the card preview
+    updateCardPreview();
 }
-
 
 function setupImagePositionButtons() {
-    const imagePositionButtons = document.querySelector('.image-position-buttons'); // Get the image position buttons container
-    if (!imagePositionButtons) return; // Exit if the container is not found
-    
-    imagePositionButtons.removeEventListener('click', handleImagePositionButtons); // Remove previous event listener
-    imagePositionButtons.addEventListener('click', handleImagePositionButtons); // Add new event listener
-    
+    const container = document.querySelector('.image-position-buttons');
+    if (!container || container.dataset.listenerReady === 'true') return;
+    container.dataset.listenerReady = 'true';
+    container.addEventListener('click', handleImagePositionButtons);
 }
 
-//Configure the buttons for adjusting image position
-function handleImagePositionButtons(event) {    
+function handleImagePositionButtons(event) {
     const button = event.target.closest('.btn-image-position');
-    if (!button) return;
-    
-    const direction = button.getAttribute('data-direction');
-    if (direction) {
-        adjustImagePosition(direction);
-    }
+    const direction = button?.getAttribute('data-direction');
+    if (direction) adjustImagePosition(direction);
 }
+
+window.addEventListener('beforeunload', () => cardImageLoader.reset());

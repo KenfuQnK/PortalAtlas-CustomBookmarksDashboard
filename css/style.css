@@ -19,6 +19,7 @@
      2. Base Styles
      ============================ */
   body {
+    --navigation-width: clamp(150px, 10vw, 300px);
     margin: 0;
     padding: 0;
     min-height: 100%;
@@ -46,8 +47,8 @@
   }
   
   #main-container {
-    margin-left: 10%;
-    width: 90%;
+    margin-left: var(--navigation-width);
+    width: calc(100% - var(--navigation-width));
     overflow-y: auto;
     height: 100vh;
     padding: 50px 100px 20px 20px;
@@ -59,14 +60,82 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 10%;
-    max-width: 300px;
+    width: var(--navigation-width);
     height: 100vh;
     overflow-y: auto;
     background-color: #fafafa;
     color: black;
     padding: 20px;
     box-sizing: border-box;
+  }
+
+  .navigation-resizer {
+    position: fixed;
+    top: 0;
+    left: calc(var(--navigation-width) - 1px);
+    width: 8px;
+    height: 100%;
+    z-index: 900;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .navigation-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: transparent;
+    transition: background-color .2s;
+  }
+
+  .navigation-resizer:hover::after,
+  .navigation-resizer:focus-visible::after,
+  body.is-resizing-navigation .navigation-resizer::after {
+    background: #1a73e8;
+  }
+
+  body.is-resizing-navigation {
+    cursor: ew-resize;
+  }
+
+  .sections-sticky-header {
+    position: sticky;
+    top: -20px;
+    z-index: 1;
+    margin: -20px -12px 0 -20px;
+    padding: 20px 12px 10px 20px;
+    background: #fafafa;
+    box-shadow: 0 8px 10px -12px rgba(0, 0, 0, .45);
+  }
+
+  .sections-sticky-header h2 {
+    margin: 0;
+  }
+
+  .sections-bulk-actions {
+    display: flex;
+    gap: 6px;
+    margin: 0 4px 14px 0;
+  }
+
+  .sections-bulk-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    color: #24598f;
+    background: #fff;
+    cursor: pointer;
+    font-size: .75rem;
+  }
+
+  .sections-bulk-actions button:hover {
+    border-color: #1a73e8;
+    background: #eaf3ff;
   }
   
   #navigation-container ul {
@@ -248,14 +317,6 @@
     overflow: hidden;
     max-height: 0;
   }
-  
-  .section-content.show {
-    max-height: none;
-  }
-  
-  .section-content:not(.show) {
-    transition: max-height 0.3s ease-out;
-  }
 
   .toggle-icon {
     display: inline-flex;
@@ -402,9 +463,11 @@
     max-width: 500px;
   }
 
-  .btn-image-reset {
+  .btn-image-reset,
+  .btn-image-file {
     width: 40px;
     height: 40px;
+    flex: 0 0 40px;
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 8px;
@@ -413,14 +476,24 @@
     transition: background-color 0.2s, border-color 0.2s;
   }
   
-  .btn-image-reset:hover {
+  .btn-image-reset:hover,
+  .btn-image-file:hover {
     background-color: #f0f0f0;
     border-color: #999;
   }
   
-  .btn-image-reset svg {
+  .btn-image-reset svg,
+  .btn-image-file svg {
     width: 100%;
     height: 100%;
+  }
+
+  .local-image-status {
+    display: block;
+    min-height: 18px;
+    margin-top: 5px;
+    color: #52606d;
+    font-size: 13px;
   }
   
   
@@ -673,6 +746,36 @@
   .settings-section {
     margin-bottom: 20px;
   }
+
+  .settings-section-sync {
+    margin-bottom: 8px;
+  }
+
+  .settings-information {
+    padding: 14px 16px;
+    border: 1px solid #dfe5ee;
+    border-radius: 10px;
+    background: #fff;
+    color: #41536a;
+  }
+
+  .settings-information h3 {
+    margin: 0 0 6px;
+    color: #273142;
+    font-size: 1rem;
+  }
+
+  .settings-information p {
+    margin: 0;
+    font-size: .88rem;
+    line-height: 1.4;
+  }
+
+  .settings-information .extension-version {
+    margin-top: 7px;
+    color: #667085;
+    font-size: .8rem;
+  }
   
   .settings-select {
     width: 100%;
@@ -700,6 +803,180 @@
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
   }
+
+  .settings-popup-content {
+    width: 620px !important;
+    max-height: min(760px, 90vh);
+    overflow-y: auto;
+  }
+
+  .drive-settings-card {
+    border: 1px solid #dfe5ee;
+    border-radius: 14px;
+    padding: 20px;
+    color: #273142;
+    background: linear-gradient(145deg, #fff, #f7faff);
+  }
+
+  .drive-settings-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .drive-logo {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    margin-top: 1px;
+    object-fit: contain;
+  }
+
+  .drive-title-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .drive-title-row h3 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .drive-settings-heading p {
+    margin: 5px 0 0;
+    color: #5d6878;
+    font-size: .92rem;
+  }
+
+  .drive-optional-badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #e8f1ff;
+    color: #1557a6;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .drive-benefits {
+    display: grid;
+    gap: 7px;
+    margin: 17px 0;
+    padding-left: 22px;
+    color: #384457;
+    font-size: .9rem;
+  }
+
+  .drive-benefits li::marker {
+    color: #188038;
+  }
+
+  .drive-behavior-note,
+  .drive-config-note {
+    padding: 10px 12px;
+    border-radius: 9px;
+    font-size: .82rem;
+    line-height: 1.35;
+  }
+
+  .drive-behavior-note {
+    background: #eef4fb;
+    color: #41536a;
+  }
+
+  .drive-behavior-note p {
+    margin: 0;
+  }
+
+  .drive-behavior-note p + p {
+    margin-top: 9px;
+  }
+
+  .drive-config-note {
+    margin-top: 9px;
+    background: #fff2cc;
+    color: #6f5100;
+  }
+
+  .drive-status-box {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-top: 15px;
+    padding: 12px;
+    border: 1px solid #e3e7ed;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .drive-status-dot {
+    flex: 0 0 10px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9aa0a6;
+    box-shadow: 0 0 0 4px rgba(154, 160, 166, .14);
+  }
+
+  .drive-status-dot.connected { background: #1e8e3e; box-shadow: 0 0 0 4px rgba(30, 142, 62, .14); }
+  .drive-status-dot.busy { background: #1a73e8; box-shadow: 0 0 0 4px rgba(26, 115, 232, .14); }
+  .drive-status-dot.warning { background: #f9ab00; box-shadow: 0 0 0 4px rgba(249, 171, 0, .16); }
+  .drive-status-dot.error { background: #d93025; box-shadow: 0 0 0 4px rgba(217, 48, 37, .14); }
+
+  .drive-status-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .drive-status-copy strong { font-size: .9rem; }
+  .drive-status-copy span { color: #667085; font-size: .78rem; overflow-wrap: anywhere; }
+
+  .drive-progress {
+    height: 5px;
+    margin: 8px 3px 0;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #e5eaf1;
+  }
+
+  .drive-progress-bar {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: #1a73e8;
+    transition: width .2s ease;
+  }
+
+  .drive-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .drive-primary-btn,
+  .drive-secondary-btn {
+    margin: 0;
+    padding: 10px 14px;
+    width: auto;
+  }
+
+  .drive-primary-btn { background: #1a73e8; color: #fff; }
+  .drive-primary-btn:hover { background: #155fc0; }
+  .drive-secondary-btn { background: #e8f0fe; color: #1557a6; }
+
+  .drive-link-btn {
+    margin-left: auto;
+    padding: 8px;
+    border: 0;
+    color: #b3261e;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .drive-actions button:disabled { opacity: .55; cursor: not-allowed; }
   
   /* ============================
      9. Utilities
@@ -746,4 +1023,3 @@
       margin-bottom: 20px;
     }
   }
-
