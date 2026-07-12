@@ -976,6 +976,9 @@
     cursor: pointer;
   }
 
+  .drive-danger-btn { color: #b3261e; }
+  .drive-danger-btn:hover { background: #fce8e6; }
+
   .drive-actions button:disabled { opacity: .55; cursor: not-allowed; }
   
   /* ============================

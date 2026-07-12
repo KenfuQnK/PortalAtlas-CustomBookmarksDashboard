@@ -15,16 +15,6 @@ document.addEventListener("DOMContentLoaded", async function() {
         // Initialize default data if needed
         await storage.initializeDefaultData();
 
-        // A clean v2 install has no legacy data to protect. Export its newly
-        // initialized dashboard now; updates already completed above are no-ops.
-        try {
-            await ensureV2MigrationBackup();
-        } catch (error) {
-            // Keep a fresh v2 dashboard usable and retry on its next opening.
-            // Legacy upgrades fail earlier, before storage.initialize().
-            console.error('Unable to create the automatic v2 backup:', error);
-        }
-        
         // Set language selector
         const languageSelector = document.getElementById('language-selector');
         if (languageSelector) {

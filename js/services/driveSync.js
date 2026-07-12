@@ -120,6 +120,39 @@ const driveSync = {
         this._emitStatus();
     },
 
+    async deleteAllData() {
+        if (!this._state.enabled) throw new Error('Google Drive is not connected');
+        if (!this.isConfigured()) throw new Error('Google Drive OAuth is not configured');
+        if (!navigator.onLine) throw new Error('Internet connection required to delete Google Drive data');
+
+        this._setStatus('syncing');
+        try {
+            await this._getAuthToken(true);
+            this._filesPromise = null;
+            const files = (await this._listFiles())
+                .filter(file => file.name?.startsWith(CONFIG.DRIVE.FILE_PREFIX));
+            this._state.progressDone = 0;
+            this._state.progressTotal = files.length;
+            this._emitStatus();
+
+            for (const file of files) {
+                await this._deleteFile(file.id);
+                this._state.progressDone += 1;
+                this._emitStatus();
+            }
+
+            this._filesPromise = null;
+            await this.disconnect();
+            return { deleted: files.length };
+        } catch (error) {
+            this._filesPromise = null;
+            this._state.needsSync = true;
+            await this._persistState();
+            this._setStatus(navigator.onLine ? 'error' : 'offline', error.message);
+            throw error;
+        }
+    },
+
     notifyLocalAssetChanged() {
         this._state.needsSync = true;
         this._persistState().catch(error => console.warn('Unable to persist Drive queue state:', error));
@@ -167,8 +200,14 @@ const driveSync = {
                 descriptors.push({ card, descriptor });
             }
 
+            // Keep only one file for every live image descriptor. Everything
+            // else is an orphan left by a deleted card/section or a duplicate
+            // created by an interrupted upload.
+            const staleFiles = files.filter(file => file.name?.startsWith(CONFIG.DRIVE.FILE_PREFIX)
+                && (!seenNames.has(file.name) || filesByName.get(file.name)?.id !== file.id));
+
             this._state.progressDone = 0;
-            this._state.progressTotal = descriptors.length;
+            this._state.progressTotal = descriptors.length + staleFiles.length;
             this._emitStatus();
             let changedLocalImages = false;
 
@@ -185,21 +224,29 @@ const driveSync = {
                 }
 
                 if (record && !file) {
+                    record = await this._prepareRecordForDrive(item.card, record);
                     const uploaded = await this._uploadRecord(item.card, item.descriptor, record, null);
                     filesByName.set(uploaded.name, uploaded);
                 } else if (!record && file) {
                     const restored = await this._downloadRecord(item.card, file);
                     recordsById.set(restored.id, restored);
                     changedLocalImages = true;
-                } else if (record && file && item.card.imageKind === 'url') {
+                } else if (record && file) {
                     const localRevision = record.contentRevision || await mediaStorage.fingerprintBlob(
                         record.qualityBlob || record.blob
                     );
                     const driveRevision = file.appProperties?.contentRevision || '';
-                    if (localRevision !== driveRevision) {
+                    if (record.qualityBlob) {
+                        if (localRevision !== driveRevision) {
+                            await this._uploadRecord(item.card, item.descriptor, record, file);
+                        } else {
+                            await mediaStorage.discardQuality(mediaId);
+                        }
+                    } else if (item.card.imageKind === 'url' && localRevision !== driveRevision) {
                         const localTime = Number(record.updatedAt) || 0;
                         const driveTime = Date.parse(file.modifiedTime || '') || 0;
                         if (localTime >= driveTime) {
+                            record = await this._prepareRecordForDrive(item.card, record);
                             await this._uploadRecord(item.card, item.descriptor, record, file);
                         } else {
                             const restored = await this._downloadRecord(item.card, file);
@@ -213,6 +260,14 @@ const driveSync = {
                 this._emitStatus();
             }
 
+            for (const file of staleFiles) {
+                await this._deleteFile(file.id);
+                this._state.progressDone += 1;
+                this._emitStatus();
+            }
+
+            if (staleFiles.length > 0) this._filesPromise = null;
+
             this._state.lastSyncAt = new Date().toISOString();
             this._state.lastError = '';
             this._state.needsSync = false;
@@ -221,7 +276,7 @@ const driveSync = {
             if (changedLocalImages) {
                 window.dispatchEvent(new CustomEvent('portal-atlas-drive-images-changed'));
             }
-            return { total: descriptors.length, restored: changedLocalImages };
+            return { total: descriptors.length, deleted: staleFiles.length, restored: changedLocalImages };
         } catch (error) {
             this._state.needsSync = true;
             await this._persistState();
@@ -265,22 +320,37 @@ const driveSync = {
         const downloaded = await response.blob();
         const mimeType = file.mimeType || downloaded.type || 'image/webp';
         const typedBlob = downloaded.type ? downloaded : new Blob([downloaded], { type: mimeType });
-        const variants = await mediaStorage.prepareImageVariants(typedBlob);
+        const variants = await mediaStorage.prepareImageVariants(typedBlob, { includeQuality: false });
         const record = await mediaStorage.put({
             id: mediaStorage.getIdForCard(card),
             blob: variants.blob,
-            qualityBlob: variants.qualityBlob,
+            qualityBlob: null,
             sourceType: card.imageKind === 'local' ? 'local' : 'url',
             sourceUrl: card.imageKind === 'url' ? mediaStorage.normalizeUrl(card.backgroundImage) : '',
             width: variants.width,
             height: variants.height,
-            qualityWidth: variants.qualityWidth,
-            qualityHeight: variants.qualityHeight,
+            qualityWidth: 0,
+            qualityHeight: 0,
+            lastCheckedAt: card.imageKind === 'url' ? Date.now() : 0,
             updatedAt: Date.parse(file.modifiedTime || '') || Date.now(),
             revision: card.imageKind === 'local' ? (card.imageRevision || file.appProperties?.cardRevision || '') : '',
             contentRevision: file.appProperties?.contentRevision || ''
         });
-        return record;
+        return { ...record, displayBlob: typedBlob };
+    },
+
+    async _prepareRecordForDrive(card, record) {
+        if (!record || record.qualityBlob || card.imageKind !== 'url') return record;
+        const remoteUrl = mediaStorage.normalizeUrl(card.backgroundImage);
+        if (!remoteUrl) return record;
+        try {
+            return await mediaStorage.cacheRemoteImage(remoteUrl, null, { includeQuality: true });
+        } catch (error) {
+            // If the source has disappeared, the 400px preview is still more
+            // valuable in Drive than having no recoverable copy at all.
+            console.warn('Unable to recreate a high-quality remote image; uploading its preview:', error);
+            return record;
+        }
     },
 
     async _uploadRecord(card, descriptor, record, existingFile) {
@@ -314,7 +384,18 @@ const driveSync = {
             headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
             body
         });
-        return response.json();
+        const uploaded = await response.json();
+        this._filesPromise = null;
+        if (record.qualityBlob) await mediaStorage.discardQuality(record.id);
+        return uploaded;
+    },
+
+    async _deleteFile(fileId) {
+        if (!fileId) return;
+        await this._apiFetch(`${CONFIG.DRIVE.API_ROOT}/files/${encodeURIComponent(fileId)}`, {
+            method: 'DELETE',
+            allowNotFound: true
+        });
     },
 
     async _listFiles() {
@@ -345,13 +426,15 @@ const driveSync = {
 
     async _apiFetch(url, options = {}, retry = true) {
         const token = await this._getAuthToken(false);
-        const headers = new Headers(options.headers || {});
+        const { allowNotFound = false, ...requestOptions } = options;
+        const headers = new Headers(requestOptions.headers || {});
         headers.set('Authorization', `Bearer ${token}`);
-        const response = await fetch(url, { ...options, headers });
+        const response = await fetch(url, { ...requestOptions, headers });
         if (response.status === 401 && retry) {
             await this._removeCachedToken(token);
             return this._apiFetch(url, options, false);
         }
+        if (allowNotFound && response.status === 404) return response;
         if (!response.ok) {
             let detail = '';
             try { detail = (await response.json())?.error?.message || ''; } catch (_) { /* no JSON body */ }

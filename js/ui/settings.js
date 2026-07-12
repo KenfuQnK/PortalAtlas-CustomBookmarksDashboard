@@ -51,6 +51,18 @@ function setupSettingsModal() {
         updateDriveSettingsUI();
     });
 
+    document.getElementById('drive-delete-data-btn').addEventListener('click', async () => {
+        if (!window.confirm(window.i18n.translate('drive_delete_data_confirm'))) return;
+        try {
+            await driveSync.deleteAllData();
+            alert(window.i18n.translate('drive_delete_data_success'));
+        } catch (error) {
+            console.error('Unable to delete Portal Atlas data from Google Drive:', error);
+            alert(window.i18n.translate('drive_delete_data_error'));
+        }
+        updateDriveSettingsUI();
+    });
+
     window.addEventListener('portal-atlas-drive-status', updateDriveSettingsUI);
 }
 
@@ -60,6 +72,7 @@ function updateDriveSettingsUI() {
     const connectButton = document.getElementById('drive-connect-btn');
     const syncButton = document.getElementById('drive-sync-btn');
     const disconnectButton = document.getElementById('drive-disconnect-btn');
+    const deleteDataButton = document.getElementById('drive-delete-data-btn');
     const configNote = document.getElementById('drive-config-note');
     const statusText = document.getElementById('drive-status-text');
     const statusDetail = document.getElementById('drive-status-detail');
@@ -72,10 +85,12 @@ function updateDriveSettingsUI() {
     connectButton.hidden = state.enabled;
     syncButton.hidden = !state.enabled;
     disconnectButton.hidden = !state.enabled;
+    deleteDataButton.hidden = !state.enabled;
     const busy = ['connecting', 'syncing'].includes(state.status);
     connectButton.disabled = busy || !state.configured || !state.online;
     syncButton.disabled = busy || !state.online;
     disconnectButton.disabled = busy;
+    deleteDataButton.disabled = busy || !state.online;
 
     const statusKeys = {
         disconnected: ['drive_status_disconnected', 'drive_status_disconnected_detail', ''],

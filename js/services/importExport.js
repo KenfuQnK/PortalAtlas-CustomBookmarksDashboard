@@ -46,11 +46,6 @@ function validateBackupIntegrity(cards, wrappers, mediaRecords) {
         if (!(localRecord?.blob instanceof Blob) || localRecord.blob.size === 0) {
             throw new Error(`Backup contains an invalid local image for card ${cardId}`);
         }
-        if (localRecord.qualityBlob != null && (!(localRecord.qualityBlob instanceof Blob)
-            || localRecord.qualityBlob.size === 0
-            || !/^image\//i.test(localRecord.qualityBlob.type || ''))) {
-            throw new Error(`Backup contains an invalid high-quality image for card ${cardId}`);
-        }
         if (card.imageRevision && localRecord.revision !== card.imageRevision) {
             throw new Error(`Backup contains the wrong local image revision for card ${cardId}`);
         }
@@ -61,13 +56,31 @@ async function buildExportPayload(snapshot = null) {
     const source = snapshot || await readCurrentExportSnapshot();
     const { cards, wrappers, wrapperStates, highestDefaultNum, allMedia, language } = source;
     const usedMediaIds = new Set(cards.map(card => mediaStorage.getIdForCard(card)).filter(Boolean));
-    const media = allMedia.filter(record => usedMediaIds.has(record.id));
-    validateBackupIntegrity(cards, wrappers, media);
+    const media = await Promise.all(allMedia
+        .filter(record => usedMediaIds.has(record.id))
+        .map(async record => {
+            const previewRevision = await mediaStorage.fingerprintBlob(record.blob);
+            return {
+                ...record,
+                qualityBlob: null,
+                qualityWidth: 0,
+                qualityHeight: 0,
+                revision: record.sourceType === 'local' ? previewRevision : '',
+                contentRevision: previewRevision
+            };
+        }));
+    const mediaById = new Map(media.map(record => [record.id, record]));
+    const backupCards = cards.map(card => {
+        if (card.imageKind !== 'local') return card;
+        const record = mediaById.get(mediaStorage.localId(card.id));
+        return record ? { ...card, imageRevision: record.revision } : card;
+    });
+    validateBackupIntegrity(backupCards, wrappers, media);
 
     return {
         version: CONFIG.SCHEMA_VERSION,
         exportedAt: new Date().toISOString(),
-        cards,
+        cards: backupCards,
         wrappers,
         wrapperStates,
         highestDefaultNum,
@@ -150,18 +163,58 @@ async function serializeBackup(payload) {
 function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     return new Promise((resolve, reject) => {
-        chrome.downloads.download({ url, filename, saveAs: false }, downloadId => {
-            const error = chrome.runtime.lastError;
+        let downloadId = null;
+        let settled = false;
+        const timeout = setTimeout(() => finish(new Error('The backup download did not finish in time')), 5 * 60 * 1000);
+
+        const cleanup = () => {
+            clearTimeout(timeout);
+            chrome.downloads.onChanged.removeListener(onChanged);
             URL.revokeObjectURL(url);
+        };
+        const finish = (error = null) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (error) reject(error);
+            else resolve(downloadId);
+        };
+        const onChanged = delta => {
+            if (!downloadId || delta.id !== downloadId) return;
+            if (delta.state?.current === 'complete') finish();
+            if (delta.state?.current === 'interrupted') {
+                finish(new Error(delta.error?.current || 'The backup download was interrupted'));
+            }
+        };
+
+        chrome.downloads.onChanged.addListener(onChanged);
+        chrome.downloads.download({ url, filename, saveAs: false }, acceptedId => {
+            const error = chrome.runtime.lastError;
             if (error) {
-                reject(new Error(error.message));
+                finish(new Error(error.message));
                 return;
             }
-            if (!Number.isInteger(downloadId)) {
-                reject(new Error('Chrome did not confirm the backup download'));
+            if (!Number.isInteger(acceptedId)) {
+                finish(new Error('Chrome did not confirm the backup download'));
                 return;
             }
-            resolve(downloadId);
+            // The download callback only confirms that Chrome accepted the
+            // request. Migration waits for the actual file to finish writing.
+            // The search also closes the small race where a tiny file finishes
+            // before the callback assigns its id.
+            downloadId = Number(acceptedId);
+            chrome.downloads.search({ id: downloadId }, items => {
+                const searchError = chrome.runtime.lastError;
+                if (searchError) {
+                    finish(new Error(searchError.message));
+                    return;
+                }
+                const item = items?.[0];
+                if (item?.state === 'complete') finish();
+                if (item?.state === 'interrupted') {
+                    finish(new Error(item.error || 'The backup download was interrupted'));
+                }
+            });
         });
     });
 }
@@ -169,7 +222,8 @@ function downloadBlob(blob, filename) {
 async function ensureV2MigrationBackup({ beforeMigrationOnly = false } = {}) {
     const run = async () => {
         const localItems = await getChromeStorage('local');
-        if (localItems[CONFIG.STORAGE_KEYS.V2_MIGRATION_BACKUP]?.version === CONFIG.SCHEMA_VERSION) {
+        const previousBackup = localItems[CONFIG.STORAGE_KEYS.V2_MIGRATION_BACKUP];
+        if (previousBackup?.version === CONFIG.SCHEMA_VERSION && previousBackup.completedAt) {
             return false;
         }
 
@@ -194,7 +248,7 @@ async function ensureV2MigrationBackup({ beforeMigrationOnly = false } = {}) {
             [CONFIG.STORAGE_KEYS.V2_MIGRATION_BACKUP]: {
                 version: CONFIG.SCHEMA_VERSION,
                 downloadId,
-                downloadStartedAt: new Date().toISOString()
+                completedAt: new Date().toISOString()
             }
         });
         return true;
@@ -263,9 +317,19 @@ async function prepareImportedBackup(parsed) {
             throw new Error('Incomplete Portal Atlas backup');
         }
         const mediaRecords = mediaStorage.portableToRecords(parsed.assets || []);
-        validateBackupIntegrity(parsed.cards, parsed.wrappers, mediaRecords);
+        const mediaById = new Map(mediaRecords.map(record => [String(record.id), record]));
+        const cards = await Promise.all(parsed.cards.map(async card => {
+            if (card.imageKind !== 'local') return card;
+            const record = mediaById.get(mediaStorage.localId(card.id));
+            if (!record?.blob) return card;
+            const revision = await mediaStorage.fingerprintBlob(record.blob);
+            record.revision = revision;
+            record.contentRevision = revision;
+            return { ...card, imageRevision: revision };
+        }));
+        validateBackupIntegrity(cards, parsed.wrappers, mediaRecords);
         return {
-            cards: parsed.cards,
+            cards,
             wrappers: parsed.wrappers,
             wrapperStates: parsed.wrapperStates || {},
             highestDefaultNum: parsed.highestDefaultNum ?? -1,

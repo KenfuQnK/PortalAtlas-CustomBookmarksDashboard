@@ -1,18 +1,10 @@
-# Ignorar el script de Python
-.SendToClaude.py
-
-# Ignorar la carpeta send
-.send/
-
-# Ignorar los enlaces precargados
-js/config/default.js
+# Mantener fuera del paquete cualquier variante privada de enlaces precargados
 js/config/default.affiliate.js
 
 # Ignorar la carpeta de imagenes para la extensión
 screenshots/
 
-Enviado a Google/
-
-ejemplo.json
-Cómo probarla.md
-GUIA.md
+# Paquetes generados
+dist/
+cmdCreatePublishableVersion.bat
+notes/

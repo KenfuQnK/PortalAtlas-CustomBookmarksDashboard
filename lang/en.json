@@ -89,5 +89,9 @@
     "drive_status_authorization_detail": "Connect again to renew Google Drive access.",
     "drive_status_error": "Synchronization problem",
     "drive_status_error_detail": "The operation will be retried later.",
-    "drive_last_sync": "Last synchronization: {0}"
+    "drive_last_sync": "Last synchronization: {0}",
+    "drive_delete_data": "Delete my Drive data",
+    "drive_delete_data_confirm": "Permanently delete every image saved by Portal Atlas from Google Drive and disconnect the account? Cards and local previews will remain, but high-quality copies stored only in Drive will be lost.",
+    "drive_delete_data_success": "Portal Atlas data has been deleted from Google Drive and the account has been disconnected.",
+    "drive_delete_data_error": "Not all Google Drive data could be deleted. Check your connection and try again."
 }

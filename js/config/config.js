@@ -36,7 +36,11 @@ const CONFIG = {
         QUALITY_MAX_DIMENSION: 1600,
         QUALITY_WEBP_QUALITY: 0.9,
         LOAD_CONCURRENCY: 4,
-        LAZY_ROOT_MARGIN: '300px'
+        LAZY_ROOT_MARGIN: '300px',
+        // A cached URL image is immediately usable. Revalidate periodically
+        // so remote changes arrive without contacting every image host on
+        // every new tab opening.
+        REMOTE_REVALIDATE_MS: 7 * 24 * 60 * 60 * 1000
     },
     SYNC: {
         QUOTA_BYTES: 102400,

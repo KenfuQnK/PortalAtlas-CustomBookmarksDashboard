@@ -72,7 +72,17 @@ Available in multiple languages:
 **Transform your browsing experience with Portal Atlas - where functionality meets creativity on your new tab page.**
 
 
-_Note: Portal Atlas itself does not collect your data. Metadata is kept locally and, when Chrome Sync is enabled, synchronized by Chrome; remote card images are requested from their source websites. If the user explicitly connects Google Drive, optimized image copies are stored privately in the appDataFolder area of that user's Drive and remain inaccessible to ordinary Drive browsing._
+_Privacy note: Portal Atlas has no developer-operated backend, analytics, or advertising. Metadata is kept locally and, when Chrome Sync is enabled, synchronized by Chrome; remote card images are requested from the source selected by the user. If the user explicitly connects Google Drive, optimized image copies are stored privately in that user's `appDataFolder`. See `privacidad de datos.md` for the complete data-handling description._
+
+## Permission rationale
+
+- `<all_urls>` is intentional and required by the core feature that lets users fetch and cache a card image from any URL they choose. Portal Atlas does not inject scripts into those sites or read their page content.
+- `downloads` creates manual exports and the one-time safety backup made before migrating existing v1 data.
+- `identity` authorizes the optional Google Drive integration.
+- `storage` and `unlimitedStorage` keep dashboard metadata and user-selected images available locally.
+
+The definitive storage rules for previews, high-quality copies, Google Drive, and backups are documented in `ARQUITECTURA_IMAGENES.md`.
+
 ___
 
 Do you love the extension? Do you want to invite me a coffe?

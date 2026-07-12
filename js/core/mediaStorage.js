@@ -105,6 +105,9 @@ const mediaStorage = {
             height: Number(record.height) || 0,
             qualityWidth: Number(record.qualityWidth) || 0,
             qualityHeight: Number(record.qualityHeight) || 0,
+            lastCheckedAt: Number.isFinite(Number(record.lastCheckedAt))
+                ? Number(record.lastCheckedAt)
+                : 0,
             updatedAt: Number.isFinite(Number(record.updatedAt))
                 ? Number(record.updatedAt)
                 : Date.now(),
@@ -123,6 +126,17 @@ const mediaStorage = {
     async remove(id) {
         if (!id) return;
         await this._enqueueMutation(() => this._request('readwrite', store => store.delete(id)));
+    },
+
+    async discardQuality(id) {
+        const record = await this.get(id);
+        if (!record?.qualityBlob) return record;
+        return this.put({
+            ...record,
+            qualityBlob: null,
+            qualityWidth: 0,
+            qualityHeight: 0
+        });
     },
 
     async clear() {
@@ -208,13 +222,13 @@ const mediaStorage = {
         });
     },
 
-    async cacheRemoteImage(url, sourceBlob = null) {
+    async cacheRemoteImage(url, sourceBlob = null, { includeQuality = false } = {}) {
         const normalizedUrl = this.normalizeUrl(url);
         if (!normalizedUrl) throw new Error('Invalid remote image URL');
 
         const previous = await this.get(this.remoteId(normalizedUrl));
         const responseBlob = sourceBlob || await this.fetchRemoteBlob(normalizedUrl);
-        const optimized = await this.prepareImageVariants(responseBlob);
+        const optimized = await this.prepareImageVariants(responseBlob, { includeQuality });
 
         const record = await this.put({
             id: this.remoteId(normalizedUrl),
@@ -226,6 +240,7 @@ const mediaStorage = {
             height: optimized.height,
             qualityWidth: optimized.qualityWidth,
             qualityHeight: optimized.qualityHeight,
+            lastCheckedAt: Date.now(),
             updatedAt: Date.now()
         });
         return {
@@ -320,7 +335,7 @@ const mediaStorage = {
         }
     },
 
-    async prepareImageVariants(blob) {
+    async prepareImageVariants(blob, { includeQuality = true } = {}) {
         this._assertImageBlob(blob);
         const mimeType = (blob.type || '').split(';', 1)[0].toLowerCase();
         if (mimeType === 'image/svg+xml' || await this._isAnimatedImage(blob, mimeType)) {
@@ -341,6 +356,16 @@ const mediaStorage = {
             const preview = await this._createOptimizedFromBitmap(
                 blob, bitmap, CONFIG.MEDIA.MAX_DIMENSION, CONFIG.MEDIA.WEBP_QUALITY, false
             );
+            if (!includeQuality) {
+                return {
+                    blob: preview.blob,
+                    width: preview.width,
+                    height: preview.height,
+                    qualityBlob: null,
+                    qualityWidth: 0,
+                    qualityHeight: 0
+                };
+            }
             const quality = await this._createOptimizedFromBitmap(
                 blob, bitmap, CONFIG.MEDIA.QUALITY_MAX_DIMENSION, CONFIG.MEDIA.QUALITY_WEBP_QUALITY, true
             );
@@ -455,15 +480,11 @@ const mediaStorage = {
             sourceUrl: record.sourceUrl || '',
             width: record.width || 0,
             height: record.height || 0,
-            qualityWidth: record.qualityWidth || 0,
-            qualityHeight: record.qualityHeight || 0,
+            lastCheckedAt: record.lastCheckedAt || 0,
             updatedAt: record.updatedAt || 0,
             revision: record.revision || '',
             contentRevision: record.contentRevision || '',
-            data: await this.blobToDataUrl(record.blob),
-            qualityData: record.qualityBlob instanceof Blob
-                ? await this.blobToDataUrl(record.qualityBlob)
-                : ''
+            data: await this.blobToDataUrl(record.blob)
         })));
     },
 
@@ -475,13 +496,14 @@ const mediaStorage = {
             sourceUrl: record.sourceUrl || '',
             width: Number(record.width) || 0,
             height: Number(record.height) || 0,
-            qualityWidth: Number(record.qualityWidth) || 0,
-            qualityHeight: Number(record.qualityHeight) || 0,
+            qualityWidth: 0,
+            qualityHeight: 0,
+            lastCheckedAt: Number.isFinite(Number(record.lastCheckedAt)) ? Number(record.lastCheckedAt) : 0,
             updatedAt: Number.isFinite(Number(record.updatedAt)) ? Number(record.updatedAt) : Date.now(),
             revision: record.revision || '',
             contentRevision: record.contentRevision || '',
             blob: this.dataUrlToBlob(record.data),
-            qualityBlob: record.qualityData ? this.dataUrlToBlob(record.qualityData) : null
+            qualityBlob: null
         }));
     },
 

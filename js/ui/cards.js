@@ -53,6 +53,8 @@ const cardImageLoader = {
         if (!element || !card || generation !== this._generation) return;
 
         const mediaId = mediaStorage.getIdForCard(card);
+        const driveState = typeof driveSync !== 'undefined' ? driveSync.getState() : null;
+        const driveAvailable = Boolean(driveState?.enabled && driveState.online);
         let cachedRecord = null;
         if (mediaId) {
             try {
@@ -67,7 +69,7 @@ const cardImageLoader = {
             || cachedRecord?.revision === card.imageRevision;
         if (!localRevisionMatches) cachedRecord = null;
 
-        if (!cachedRecord && mediaId && typeof driveSync !== 'undefined') {
+        if (!cachedRecord && mediaId && driveAvailable) {
             cachedRecord = await driveSync.restoreCardImage(card);
             localRevisionMatches = card.imageKind !== 'local'
                 || !card.imageRevision
@@ -76,26 +78,58 @@ const cardImageLoader = {
 
         if (cachedRecord?.blob && localRevisionMatches) {
             this._stats.cacheHits += 1;
-            this._setBlobBackground(element, cachedRecord.qualityBlob || cachedRecord.blob, generation);
+            this._setBlobBackground(element,
+                cachedRecord.displayBlob || cachedRecord.qualityBlob || cachedRecord.blob, generation);
         }
 
         if (card.imageKind === 'local') {
             if (!cachedRecord) {
                 element.classList.add('card-image-missing');
                 element.title = window.i18n.translate('local_image_missing');
+            } else if (driveAvailable && !cachedRecord.qualityBlob && !cachedRecord.displayBlob) {
+                const driveRecord = await driveSync.restoreCardImage(card);
+                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                }
             }
             return;
         }
 
         const remoteUrl = mediaStorage.normalizeUrl(card.backgroundImage);
         if (!remoteUrl) return;
+        const lastCheckedAt = Number(cachedRecord?.lastCheckedAt || cachedRecord?.updatedAt) || 0;
+        if (cachedRecord?.blob && Date.now() - lastCheckedAt < CONFIG.MEDIA.REMOTE_REVALIDATE_MS) {
+            if (driveAvailable && !cachedRecord.qualityBlob && !cachedRecord.displayBlob) {
+                const driveRecord = await driveSync.restoreCardImage(card);
+                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                }
+            }
+            return;
+        }
 
         try {
-            const record = await this._enqueueRemote(remoteUrl);
+            const record = await this._enqueueRemote(remoteUrl, driveAvailable);
             if (generation === this._generation && element.isConnected) {
                 this._setBlobBackground(element, record.displayBlob || record.blob, generation);
             }
         } catch (error) {
+            // Keep the last valid cached copy and avoid hammering a dead or
+            // temporarily unavailable source on every new tab.
+            if (cachedRecord?.blob) {
+                try {
+                    await mediaStorage.put({ ...cachedRecord, lastCheckedAt: Date.now() });
+                } catch (cacheError) {
+                    console.warn('Unable to record remote image revalidation:', cacheError);
+                }
+            }
+            if (driveAvailable) {
+                const driveRecord = await driveSync.restoreCardImage(card);
+                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                    return;
+                }
+            }
             // Some hosts prevent a fetch/canvas conversion even though a CSS
             // background is displayable. Probe the original URL, but keep the
             // existing Blob preview until the browser confirms it has loaded.
@@ -104,12 +138,12 @@ const cardImageLoader = {
         }
     },
 
-    _enqueueRemote(url) {
-        const id = mediaStorage.remoteId(url);
+    _enqueueRemote(url, includeQuality) {
+        const id = `${mediaStorage.remoteId(url)}:${includeQuality ? 'quality' : 'preview'}`;
         if (this._remotePromises.has(id)) return this._remotePromises.get(id);
 
         const promise = new Promise((resolve, reject) => {
-            this._queue.push({ url, resolve, reject });
+            this._queue.push({ url, includeQuality, resolve, reject });
             this._drainQueue();
         }).finally(() => {
             this._remotePromises.delete(id);
@@ -125,7 +159,7 @@ const cardImageLoader = {
             this._stats.remoteRequests += 1;
             this._stats.maxConcurrent = Math.max(this._stats.maxConcurrent, this._active);
 
-            mediaStorage.cacheRemoteImage(task.url)
+            mediaStorage.cacheRemoteImage(task.url, null, { includeQuality: task.includeQuality })
                 .then(record => {
                     if (record.contentChanged && typeof driveSync !== 'undefined') {
                         driveSync.notifyLocalAssetChanged();
