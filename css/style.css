@@ -19,6 +19,7 @@
      2. Base Styles
      ============================ */
   body {
+    --navigation-width: clamp(150px, 10vw, 300px);
     margin: 0;
     padding: 0;
     min-height: 100%;
@@ -46,8 +47,8 @@
   }
   
   #main-container {
-    margin-left: 10%;
-    width: 90%;
+    margin-left: var(--navigation-width);
+    width: calc(100% - var(--navigation-width));
     overflow-y: auto;
     height: 100vh;
     padding: 50px 100px 20px 20px;
@@ -59,14 +60,82 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 10%;
-    max-width: 300px;
+    width: var(--navigation-width);
     height: 100vh;
     overflow-y: auto;
     background-color: #fafafa;
     color: black;
     padding: 20px;
     box-sizing: border-box;
+  }
+
+  .navigation-resizer {
+    position: fixed;
+    top: 0;
+    left: calc(var(--navigation-width) - 1px);
+    width: 8px;
+    height: 100%;
+    z-index: 900;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .navigation-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: transparent;
+    transition: background-color .2s;
+  }
+
+  .navigation-resizer:hover::after,
+  .navigation-resizer:focus-visible::after,
+  body.is-resizing-navigation .navigation-resizer::after {
+    background: #1a73e8;
+  }
+
+  body.is-resizing-navigation {
+    cursor: ew-resize;
+  }
+
+  .sections-sticky-header {
+    position: sticky;
+    top: -20px;
+    z-index: 1;
+    margin: -20px -12px 0 -20px;
+    padding: 20px 12px 10px 20px;
+    background: #fafafa;
+    box-shadow: 0 8px 10px -12px rgba(0, 0, 0, .45);
+  }
+
+  .sections-sticky-header h2 {
+    margin: 0;
+  }
+
+  .sections-bulk-actions {
+    display: flex;
+    gap: 6px;
+    margin: 0 4px 14px 0;
+  }
+
+  .sections-bulk-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    color: #24598f;
+    background: #fff;
+    cursor: pointer;
+    font-size: .75rem;
+  }
+
+  .sections-bulk-actions button:hover {
+    border-color: #1a73e8;
+    background: #eaf3ff;
   }
   
   #navigation-container ul {
@@ -247,14 +316,6 @@
     transition: max-height 0.3s ease-out;
     overflow: hidden;
     max-height: 0;
-  }
-  
-  .section-content.show {
-    max-height: none;
-  }
-  
-  .section-content:not(.show) {
-    transition: max-height 0.3s ease-out;
   }
 
   .toggle-icon {
@@ -688,6 +749,32 @@
 
   .settings-section-sync {
     margin-bottom: 8px;
+  }
+
+  .settings-information {
+    padding: 14px 16px;
+    border: 1px solid #dfe5ee;
+    border-radius: 10px;
+    background: #fff;
+    color: #41536a;
+  }
+
+  .settings-information h3 {
+    margin: 0 0 6px;
+    color: #273142;
+    font-size: 1rem;
+  }
+
+  .settings-information p {
+    margin: 0;
+    font-size: .88rem;
+    line-height: 1.4;
+  }
+
+  .settings-information .extension-version {
+    margin-top: 7px;
+    color: #667085;
+    font-size: .8rem;
   }
   
   .settings-select {

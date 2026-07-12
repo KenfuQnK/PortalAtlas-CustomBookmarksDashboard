@@ -3,6 +3,11 @@ function setupSettingsModal() {
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPopup = document.getElementById('popup-form-settings');
     const closeSettingsPopup = document.getElementById('close-popup-settings');
+    const versionElement = document.getElementById('extension-version');
+
+    if (versionElement && typeof chrome !== 'undefined' && chrome.runtime?.getManifest) {
+        versionElement.textContent = chrome.runtime.getManifest().version;
+    }
 
     settingsBtn.addEventListener('click', () => {
         settingsPopup.style.display = 'block';

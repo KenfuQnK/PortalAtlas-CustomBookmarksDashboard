@@ -250,6 +250,7 @@ function updateCardPreview() {
     const localPreviewUrl = typeof getCardFormPreviewUrl === 'function' ? getCardFormPreviewUrl() : '';
 
     preview.className = `card ${cardSize}`;
+    updateCardPreviewDimensions(preview, cardSize);
     preview.textContent = showName ? (name || window.i18n.translate('preview')) : '';
     preview.style.backgroundSize = `${backgroundSize}%`;
     preview.style.backgroundColor = backgroundColor;
@@ -265,6 +266,50 @@ function updateCardPreview() {
     const imageInput = document.getElementById('card-background-image');
     const [x, y] = (imageInput.dataset.position || '50,50').split(',').map(Number);
     preview.style.backgroundPosition = `${x}% ${y}%`;
+}
+
+function captureCardPreviewDimensions(cardId, cardSize) {
+    const preview = document.getElementById('card-preview');
+    const card = cardId ? document.getElementById(cardId) : null;
+    const bounds = card?.getBoundingClientRect();
+
+    if (!preview || !bounds || bounds.width <= 0 || bounds.height <= 0) {
+        clearCardPreviewDimensions();
+        return;
+    }
+
+    preview.dataset.sourceSize = cardSize || '';
+    preview.dataset.sourceAspectRatio = String(bounds.width / bounds.height);
+}
+
+function clearCardPreviewDimensions() {
+    const preview = document.getElementById('card-preview');
+    if (!preview) return;
+    delete preview.dataset.sourceSize;
+    delete preview.dataset.sourceAspectRatio;
+}
+
+function updateCardPreviewDimensions(preview, cardSize) {
+    const defaultRatios = {
+        'card-small': 1,
+        'card-wide': 2,
+        'card-big': 1
+    };
+    const capturedRatio = Number.parseFloat(preview.dataset.sourceAspectRatio);
+    const useCapturedRatio = preview.dataset.sourceSize === cardSize
+        && Number.isFinite(capturedRatio)
+        && capturedRatio > 0;
+    const ratio = useCapturedRatio ? capturedRatio : (defaultRatios[cardSize] || 1);
+    const maxWidth = 240;
+    const maxHeight = 240;
+
+    if (ratio >= 1) {
+        preview.style.width = `${maxWidth}px`;
+        preview.style.height = `${maxWidth / ratio}px`;
+    } else {
+        preview.style.width = `${maxHeight * ratio}px`;
+        preview.style.height = `${maxHeight}px`;
+    }
 }
 
 function adjustImagePosition(direction) {

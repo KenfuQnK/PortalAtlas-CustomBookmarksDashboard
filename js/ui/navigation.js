@@ -1,5 +1,8 @@
 // Function to initialize the script
 async function initNavigation() {
+    setupNavigationResize();
+    document.getElementById('expand-all-sections').addEventListener('click', () => setAllSectionsExpanded(true));
+    document.getElementById('collapse-all-sections').addEventListener('click', () => setAllSectionsExpanded(false));
     await updateNavigationMenu();
     const mainContainer = document.getElementById('main-container');
     let scrollFrame = null;
@@ -10,6 +13,78 @@ async function initNavigation() {
             updateActiveSection();
         });
     }, { passive: true });
+}
+
+const NAVIGATION_WIDTH_KEY = 'portalAtlas.navigationWidth';
+const NAVIGATION_MIN_WIDTH = 150;
+const NAVIGATION_MAX_WIDTH = 520;
+
+function clampNavigationWidth(width) {
+    return Math.min(NAVIGATION_MAX_WIDTH, Math.max(NAVIGATION_MIN_WIDTH, width));
+}
+
+function applyNavigationWidth(width) {
+    const availableWidth = Math.max(NAVIGATION_MIN_WIDTH, window.innerWidth - 320);
+    const safeWidth = Math.min(clampNavigationWidth(width), availableWidth);
+    document.body.style.setProperty('--navigation-width', `${safeWidth}px`);
+    return safeWidth;
+}
+
+function setupNavigationResize() {
+    const resizer = document.getElementById('navigation-resizer');
+    const storedWidth = Number.parseFloat(localStorage.getItem(NAVIGATION_WIDTH_KEY));
+    let preferredWidth = Number.isFinite(storedWidth)
+        ? storedWidth
+        : document.getElementById('navigation-container').getBoundingClientRect().width;
+    applyNavigationWidth(preferredWidth);
+
+    let activePointerId = null;
+    let dragOffset = 0;
+    resizer.addEventListener('pointerdown', event => {
+        activePointerId = event.pointerId;
+        dragOffset = event.clientX
+            - document.getElementById('navigation-container').getBoundingClientRect().width;
+        resizer.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-resizing-navigation');
+        event.preventDefault();
+    });
+
+    resizer.addEventListener('pointermove', event => {
+        if (event.pointerId !== activePointerId) return;
+        preferredWidth = event.clientX - dragOffset;
+        applyNavigationWidth(preferredWidth);
+    });
+
+    const finishResize = event => {
+        if (event.pointerId !== activePointerId) return;
+        activePointerId = null;
+        document.body.classList.remove('is-resizing-navigation');
+        const currentWidth = document.getElementById('navigation-container').getBoundingClientRect().width;
+        preferredWidth = currentWidth;
+        localStorage.setItem(NAVIGATION_WIDTH_KEY, String(Math.round(currentWidth)));
+    };
+    resizer.addEventListener('pointerup', finishResize);
+    resizer.addEventListener('pointercancel', finishResize);
+
+    resizer.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        const currentWidth = document.getElementById('navigation-container').getBoundingClientRect().width;
+        preferredWidth = currentWidth + direction * 16;
+        const nextWidth = applyNavigationWidth(preferredWidth);
+        preferredWidth = nextWidth;
+        localStorage.setItem(NAVIGATION_WIDTH_KEY, String(Math.round(nextWidth)));
+        event.preventDefault();
+    });
+
+    window.addEventListener('resize', () => {
+        applyNavigationWidth(preferredWidth);
+    });
+}
+
+function setAllSectionsExpanded(expanded) {
+    document.querySelectorAll('.wrapper').forEach(wrapper => setSectionExpanded(wrapper, expanded));
+    saveWrapperStates();
 }
 
 // Function to update the list of sections in the navigation menu
@@ -55,27 +130,7 @@ renderWrappers = async function() {
 // Function to expand a section and collapse others
 function expandSection(sectionId) {
     const wrappers = document.querySelectorAll('.wrapper');
-    wrappers.forEach(wrapper => {
-        const sectionContent = wrapper.querySelector('.section-content');
-        const icon = wrapper.querySelector('.toggle-icon');
-        
-        if (wrapper.id === sectionId) {
-            sectionContent.classList.add('show');
-            icon.classList.remove('collapsed');
-            
-            // Ensure content is loaded before getting the height
-            setTimeout(() => {
-                const totalHeight = Array.from(sectionContent.children)
-                    .reduce((height, child) => height + child.offsetHeight, 0);
-                sectionContent.style.maxHeight = `${totalHeight}px`;
-            }, 0);
-        } else {
-            sectionContent.classList.remove('show');
-            icon.classList.add('collapsed');
-            sectionContent.style.maxHeight = null;
-        }
-    });
-    
+    wrappers.forEach(wrapper => setSectionExpanded(wrapper, wrapper.id === sectionId));
     saveWrapperStates();
 }
 

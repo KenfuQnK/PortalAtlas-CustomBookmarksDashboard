@@ -21,9 +21,7 @@ function createWrapper(wrapperData, isExpanded) {
 
     const sectionContent = document.createElement('section'); // Create a section for the content
     sectionContent.className = `section-content ${expanded ? 'show' : ''}`; // Set class based on expanded state
-//    if (expanded) {
-//        sectionContent.style.maxHeight = 'none'; // Set max height if expanded
-//    }
+    if (expanded) sectionContent.style.maxHeight = 'none';
     sectionContent.id = `section-${wrapperData.id}`; // Set the ID for the content section
 
     const container = document.createElement('div'); // Create a container for cards within the wrapper
@@ -110,46 +108,62 @@ async function loadWrapperSelect() {
     }
 }
 
-// Toggle section visibility
-function toggleSection(wrapperId) {
-    const section = document.getElementById(wrapperId);
-    const sectionContent = section.getElementsByClassName("section-content")[0];
-    const icon = section.querySelector('.toggle-icon');
-    
-    if (sectionContent.classList.contains('show')) {
-        // Guardar la altura actual antes de colapsar
-        const currentHeight = sectionContent.scrollHeight;
-        sectionContent.style.maxHeight = currentHeight + 'px';
-        
-        // Forzar un reflow
-        sectionContent.offsetHeight;
-        
-        // Colapsar
+// CSS cannot interpolate max-height to or from "none", so animations use
+// the measured pixel height and only restore "none" after expanding.
+function setSectionExpanded(wrapper, expanded, animate = true) {
+    if (!wrapper) return;
+    const sectionContent = wrapper.querySelector('.section-content');
+    const icon = wrapper.querySelector('.toggle-icon');
+    if (!sectionContent || !icon) return;
+
+    if (sectionContent._heightTransitionHandler) {
+        sectionContent.removeEventListener('transitionend', sectionContent._heightTransitionHandler);
+        sectionContent._heightTransitionHandler = null;
+    }
+
+    const currentlyExpanded = sectionContent.classList.contains('show');
+    if (currentlyExpanded === expanded) {
+        icon.classList.toggle('collapsed', !expanded);
+        sectionContent.style.maxHeight = expanded ? 'none' : '0px';
+        return;
+    }
+
+    if (!animate) {
+        sectionContent.classList.toggle('show', expanded);
+        icon.classList.toggle('collapsed', !expanded);
+        sectionContent.style.maxHeight = expanded ? 'none' : '0px';
+        return;
+    }
+
+    if (expanded) {
         sectionContent.style.maxHeight = '0px';
-        sectionContent.classList.remove('show');
-        icon.classList.add('collapsed');
-        
-        // Limpiar maxHeight después de la transición
-        sectionContent.addEventListener('transitionend', function handler() {
-            sectionContent.style.maxHeight = null;
-            sectionContent.removeEventListener('transitionend', handler);
-        }, { once: true });
-    } else {
-        // Expandir
+        sectionContent.offsetHeight;
         sectionContent.classList.add('show');
         icon.classList.remove('collapsed');
-        
-        // Establecer la altura máxima al valor real del contenido
-        const totalHeight = sectionContent.scrollHeight;
-        sectionContent.style.maxHeight = totalHeight + 'px';
-        
-        // Limpiar maxHeight después de la transición
-        sectionContent.addEventListener('transitionend', function handler() {
-            sectionContent.style.maxHeight = 'none';
-            sectionContent.removeEventListener('transitionend', handler);
-        }, { once: true });
+        sectionContent.style.maxHeight = `${sectionContent.scrollHeight}px`;
+    } else {
+        sectionContent.style.maxHeight = `${sectionContent.scrollHeight}px`;
+        sectionContent.offsetHeight;
+        sectionContent.classList.remove('show');
+        icon.classList.add('collapsed');
+        sectionContent.style.maxHeight = '0px';
     }
-    
+
+    const handler = event => {
+        if (event.propertyName !== 'max-height') return;
+        if (sectionContent.classList.contains('show')) sectionContent.style.maxHeight = 'none';
+        sectionContent.removeEventListener('transitionend', handler);
+        sectionContent._heightTransitionHandler = null;
+    };
+    sectionContent._heightTransitionHandler = handler;
+    sectionContent.addEventListener('transitionend', handler);
+}
+
+function toggleSection(wrapperId) {
+    const section = document.getElementById(wrapperId);
+    if (!section) return;
+    const sectionContent = section.querySelector('.section-content');
+    setSectionExpanded(section, !sectionContent.classList.contains('show'));
     saveWrapperStates();
 }
 

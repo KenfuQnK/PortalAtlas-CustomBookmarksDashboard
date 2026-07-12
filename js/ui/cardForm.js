@@ -60,8 +60,16 @@ function setupPopupForm() {
     });
 
     closePopup.addEventListener('click', closeCardPopup);
-    window.addEventListener('click', event => {
-        if (event.target === popupForm) closeCardPopup();
+    let pointerStartedOnBackdrop = false;
+    popupForm.addEventListener('pointerdown', event => {
+        pointerStartedOnBackdrop = event.target === popupForm;
+    });
+    popupForm.addEventListener('pointerup', event => {
+        if (pointerStartedOnBackdrop && event.target === popupForm) closeCardPopup();
+        pointerStartedOnBackdrop = false;
+    });
+    popupForm.addEventListener('pointercancel', () => {
+        pointerStartedOnBackdrop = false;
     });
 
     form.addEventListener('submit', handleCardFormSubmit);
@@ -156,6 +164,7 @@ function resetSelectedImage() {
 
 async function openEditPopup(cardData) {
     cardFormImageState.reset();
+    captureCardPreviewDimensions(cardData.id, cardData.size);
     const formGeneration = cardFormImageState.generation;
     await loadWrapperSelect();
     if (formGeneration !== cardFormImageState.generation) return;
@@ -359,6 +368,7 @@ async function deleteCard() {
 
 async function resetCardForm() {
     cardFormImageState.reset();
+    clearCardPreviewDimensions();
     setCardFormBusy(false);
     const form = document.getElementById('new-card-form');
     form.reset();

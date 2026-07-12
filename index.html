@@ -31,11 +31,18 @@
         </button>
     </div>
 
-    <div id="main">
+	<div id="main">
 		<div id="navigation-container">
-			<h2 data-i18n="sections">Sections</h2>
+			<div class="sections-sticky-header">
+				<div class="sections-bulk-actions" aria-label="Section controls">
+					<button type="button" id="expand-all-sections" data-i18n="expand_all">Expand all</button>
+					<button type="button" id="collapse-all-sections" data-i18n="collapse_all">Collapse all</button>
+				</div>
+				<h2 data-i18n="sections">Sections</h2>
+			</div>
 			<ul id="nav-list"></ul>
 		</div>
+		<div id="navigation-resizer" class="navigation-resizer" role="separator" aria-orientation="vertical" tabindex="0" data-i18n-title="resize_sections_menu"></div>
 		<div id="main-container"></div>
 	</div>
 
@@ -95,7 +102,7 @@
                             <div class="input-with-button">
                                 <input type="text" id="card-background-image" class="form-control">
                                 <button type="button" id="select-image-file-btn" class="btn-image-file" data-i18n-title="select_local_image">
-                                    <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-import"/></svg>
+                                    <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-folder"/></svg>
                                 </button>
                                 <button type="button" id="reset-image-btn" class="btn-image-reset" data-i18n-title="reset_image">
                                     <svg class="icon icon-stroke"><use href="icons/sprites.svg#icon-reset"/></svg>
@@ -174,6 +181,11 @@
                     <option value="fr">Français</option>
                     <option value="de">Deutsch</option>
                 </select>
+            </div>
+            <div class="settings-section settings-information" aria-labelledby="information-title">
+                <h3 id="information-title" data-i18n="information">Information</h3>
+                <p data-i18n="extension_description">Portal Atlas turns your new tab into a visual dashboard of custom bookmarks organized into sections.</p>
+                <p class="extension-version"><span data-i18n="version">Version</span> <span id="extension-version">2.0.0</span></p>
             </div>
             <div class="settings-section settings-section-sync">
                 <label data-i18n="synchronization">Synchronization:</label>
