@@ -92,21 +92,28 @@ const mediaStorage = {
             throw new Error('Invalid image record');
         }
         this._assertImageBlob(record.blob);
+        if (record.qualityBlob != null) this._assertImageBlob(record.qualityBlob);
 
         const sourceType = record.sourceType || 'local';
         const normalizedRecord = {
             id: record.id,
             blob: record.blob,
+            qualityBlob: record.qualityBlob instanceof Blob ? record.qualityBlob : null,
             sourceType,
             sourceUrl: record.sourceUrl || '',
             width: Number(record.width) || 0,
             height: Number(record.height) || 0,
+            qualityWidth: Number(record.qualityWidth) || 0,
+            qualityHeight: Number(record.qualityHeight) || 0,
             updatedAt: Number.isFinite(Number(record.updatedAt))
                 ? Number(record.updatedAt)
                 : Date.now(),
             revision: record.revision || (sourceType === 'local'
-                ? await this.fingerprintBlob(record.blob)
-                : '')
+                ? await this.fingerprintBlob(record.qualityBlob instanceof Blob ? record.qualityBlob : record.blob)
+                : ''),
+            contentRevision: record.contentRevision || await this.fingerprintBlob(
+                record.qualityBlob instanceof Blob ? record.qualityBlob : record.blob
+            )
         };
 
         await this._enqueueMutation(() => this._request('readwrite', store => store.put(normalizedRecord)));
@@ -128,6 +135,11 @@ const mediaStorage = {
             || !(record.blob instanceof Blob)
             || record.blob.size === 0
             || !/^image\//i.test(record.blob.type || '')
+            || record.qualityBlob != null && (
+                !(record.qualityBlob instanceof Blob)
+                || record.qualityBlob.size === 0
+                || !/^image\//i.test(record.qualityBlob.type || '')
+            )
         ))) {
             throw new Error('Invalid image replacement set');
         }
@@ -182,13 +194,16 @@ const mediaStorage = {
     },
 
     async storeLocalImage(cardId, blob) {
-        const optimized = await this.optimizeBlob(blob);
+        const optimized = await this.prepareImageVariants(blob);
         return this.put({
             id: this.localId(cardId),
             blob: optimized.blob,
+            qualityBlob: optimized.qualityBlob,
             sourceType: 'local',
             width: optimized.width,
             height: optimized.height,
+            qualityWidth: optimized.qualityWidth,
+            qualityHeight: optimized.qualityHeight,
             updatedAt: Date.now()
         });
     },
@@ -197,22 +212,27 @@ const mediaStorage = {
         const normalizedUrl = this.normalizeUrl(url);
         if (!normalizedUrl) throw new Error('Invalid remote image URL');
 
+        const previous = await this.get(this.remoteId(normalizedUrl));
         const responseBlob = sourceBlob || await this.fetchRemoteBlob(normalizedUrl);
-        const optimized = await this.optimizeBlob(responseBlob);
+        const optimized = await this.prepareImageVariants(responseBlob);
 
         const record = await this.put({
             id: this.remoteId(normalizedUrl),
             blob: optimized.blob,
+            qualityBlob: optimized.qualityBlob,
             sourceType: 'url',
             sourceUrl: normalizedUrl,
             width: optimized.width,
             height: optimized.height,
+            qualityWidth: optimized.qualityWidth,
+            qualityHeight: optimized.qualityHeight,
             updatedAt: Date.now()
         });
-        // The optimized Blob is persisted only as the fast preview. The
-        // original response is kept in memory for the visible high-quality
-        // card and is released when cards are rerendered or the tab closes.
-        return { ...record, displayBlob: responseBlob };
+        return {
+            ...record,
+            displayBlob: record.qualityBlob || record.blob,
+            contentChanged: previous?.contentRevision !== record.contentRevision
+        };
     },
 
     async fetchRemoteBlob(url) {
@@ -291,32 +311,75 @@ const mediaStorage = {
         }
 
         try {
-            const maxDimension = CONFIG.MEDIA.MAX_DIMENSION;
-            const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-            const width = Math.max(1, Math.round(bitmap.width * scale));
-            const height = Math.max(1, Math.round(bitmap.height * scale));
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const context = canvas.getContext('2d', { alpha: true });
-            if (!context) throw new Error('Unable to prepare the image canvas');
-            context.drawImage(bitmap, 0, 0, width, height);
-
-            const optimizedBlob = await new Promise(resolve => {
-                canvas.toBlob(resolve, 'image/webp', CONFIG.MEDIA.WEBP_QUALITY);
-            });
-            if (!optimizedBlob) throw new Error('Unable to encode the optimized image');
-
-            // Never replace a small source with a larger derivative. Oversized
-            // images are always resized, even if their compressed byte size was
-            // already small.
-            if (scale === 1 && optimizedBlob.size >= blob.size) {
-                return { blob, width, height };
-            }
-            return { blob: optimizedBlob, width, height };
+            const maxDimension = Number(options.maxDimension) || CONFIG.MEDIA.MAX_DIMENSION;
+            return this._createOptimizedFromBitmap(blob, bitmap, maxDimension,
+                Number(options.quality) || CONFIG.MEDIA.WEBP_QUALITY,
+                options.preferOriginalWithinBounds === true);
         } finally {
             bitmap.close?.();
         }
+    },
+
+    async prepareImageVariants(blob) {
+        this._assertImageBlob(blob);
+        const mimeType = (blob.type || '').split(';', 1)[0].toLowerCase();
+        if (mimeType === 'image/svg+xml' || await this._isAnimatedImage(blob, mimeType)) {
+            const preserved = await this.optimizeBlob(blob, { preserveOriginalMedia: true });
+            return {
+                blob: preserved.blob,
+                width: preserved.width,
+                height: preserved.height,
+                qualityBlob: null,
+                qualityWidth: preserved.width,
+                qualityHeight: preserved.height
+            };
+        }
+
+        let bitmap;
+        try {
+            bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+            const preview = await this._createOptimizedFromBitmap(
+                blob, bitmap, CONFIG.MEDIA.MAX_DIMENSION, CONFIG.MEDIA.WEBP_QUALITY, false
+            );
+            const quality = await this._createOptimizedFromBitmap(
+                blob, bitmap, CONFIG.MEDIA.QUALITY_MAX_DIMENSION, CONFIG.MEDIA.QUALITY_WEBP_QUALITY, true
+            );
+
+            const sameBlob = quality.blob === preview.blob;
+            return {
+                blob: preview.blob,
+                width: preview.width,
+                height: preview.height,
+                qualityBlob: sameBlob ? null : quality.blob,
+                qualityWidth: quality.width,
+                qualityHeight: quality.height
+            };
+        } catch (error) {
+            throw new Error('The selected image could not be decoded');
+        } finally {
+            bitmap?.close?.();
+        }
+    },
+
+    async _createOptimizedFromBitmap(sourceBlob, bitmap, maxDimension, quality, preferOriginalWithinBounds) {
+        const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        if (scale === 1 && preferOriginalWithinBounds) return { blob: sourceBlob, width, height };
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { alpha: true });
+        if (!context) throw new Error('Unable to prepare the image canvas');
+        context.drawImage(bitmap, 0, 0, width, height);
+        const optimizedBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+        if (!optimizedBlob) throw new Error('Unable to encode the optimized image');
+
+        if (scale === 1 && optimizedBlob.size >= sourceBlob.size) {
+            return { blob: sourceBlob, width, height };
+        }
+        return { blob: optimizedBlob, width, height };
     },
 
     async _readBitmapDimensions(blob) {
@@ -392,9 +455,15 @@ const mediaStorage = {
             sourceUrl: record.sourceUrl || '',
             width: record.width || 0,
             height: record.height || 0,
+            qualityWidth: record.qualityWidth || 0,
+            qualityHeight: record.qualityHeight || 0,
             updatedAt: record.updatedAt || 0,
             revision: record.revision || '',
-            data: await this.blobToDataUrl(record.blob)
+            contentRevision: record.contentRevision || '',
+            data: await this.blobToDataUrl(record.blob),
+            qualityData: record.qualityBlob instanceof Blob
+                ? await this.blobToDataUrl(record.qualityBlob)
+                : ''
         })));
     },
 
@@ -406,9 +475,13 @@ const mediaStorage = {
             sourceUrl: record.sourceUrl || '',
             width: Number(record.width) || 0,
             height: Number(record.height) || 0,
+            qualityWidth: Number(record.qualityWidth) || 0,
+            qualityHeight: Number(record.qualityHeight) || 0,
             updatedAt: Number.isFinite(Number(record.updatedAt)) ? Number(record.updatedAt) : Date.now(),
             revision: record.revision || '',
-            blob: this.dataUrlToBlob(record.data)
+            contentRevision: record.contentRevision || '',
+            blob: this.dataUrlToBlob(record.data),
+            qualityBlob: record.qualityData ? this.dataUrlToBlob(record.qualityData) : null
         }));
     },
 
@@ -424,15 +497,18 @@ const mediaStorage = {
 
             if (embeddedOriginal) {
                 const blob = this.dataUrlToBlob(embeddedOriginal);
-                const optimized = await this.optimizeBlob(blob);
-                const revision = await this.fingerprintBlob(optimized.blob);
+                const optimized = await this.prepareImageVariants(blob);
+                const revision = await this.fingerprintBlob(optimized.qualityBlob || optimized.blob);
                 recordsById.set(this.localId(card.id), {
                     id: this.localId(card.id),
                     blob: optimized.blob,
+                    qualityBlob: optimized.qualityBlob,
                     sourceType: 'local',
                     sourceUrl: '',
                     width: optimized.width,
                     height: optimized.height,
+                    qualityWidth: optimized.qualityWidth,
+                    qualityHeight: optimized.qualityHeight,
                     updatedAt: Date.now(),
                     revision
                 });

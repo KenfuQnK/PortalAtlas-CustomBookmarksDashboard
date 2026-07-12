@@ -45,6 +45,8 @@ Available in multiple languages:
 
 - Automatic Chrome Sync for cards, sections and settings
 - Optimized local image storage with lazy loading
+- Optional private Google Drive image backup and cross-device recovery
+- Offline image cache with a fast preview and a sharper display copy
 - Export your layout for backup
 - Import layout to restore or transfer your setup
 
@@ -54,6 +56,7 @@ Available in multiple languages:
 - **Visual Organization:** Easy recognition of bookmarks through visual cues  
 - **Personalization:** Make your new tab page truly yours  
 - **Cross-device Sync:** Keep cards, sections, order and URL images consistent across Chrome devices
+- **Optional Drive Images:** Link Google Drive to recover uploaded images on other devices without making an account mandatory
 - **Backup & Restore:** Transfer the complete dashboard, including local images, in one backup file
 
 ## 📱 Usage
@@ -69,7 +72,7 @@ Available in multiple languages:
 **Transform your browsing experience with Portal Atlas - where functionality meets creativity on your new tab page.**
 
 
-_Note: Portal Atlas itself does not collect your data. Metadata is kept locally and, when Chrome Sync is enabled, synchronized by Chrome; remote card images are requested from their source websites._
+_Note: Portal Atlas itself does not collect your data. Metadata is kept locally and, when Chrome Sync is enabled, synchronized by Chrome; remote card images are requested from their source websites. If the user explicitly connects Google Drive, optimized image copies are stored privately in the appDataFolder area of that user's Drive and remain inaccessible to ordinary Drive browsing._
 ___
 
 Do you love the extension? Do you want to invite me a coffe?

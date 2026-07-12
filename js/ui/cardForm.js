@@ -115,12 +115,12 @@ async function handleLocalImageSelection(event) {
     setCardFormBusy(true);
 
     try {
-        const optimized = await mediaStorage.optimizeBlob(file);
-        const revision = await mediaStorage.fingerprintBlob(optimized.blob);
+        const optimized = await mediaStorage.prepareImageVariants(file);
+        const revision = await mediaStorage.fingerprintBlob(optimized.qualityBlob || optimized.blob);
         if (generation !== cardFormImageState.generation) return;
         cardFormImageState.pendingRecord = { ...optimized, revision };
         cardFormImageState.imageKind = 'local';
-        cardFormImageState.setPreviewBlob(optimized.blob);
+        cardFormImageState.setPreviewBlob(optimized.qualityBlob || optimized.blob);
         document.getElementById('card-background-image').value = '';
         setLocalImageStatus(window.i18n.translate('local_image_selected'));
         updateCardPreview();
@@ -215,7 +215,7 @@ async function openEditPopup(cardData) {
         if (formGeneration !== cardFormImageState.generation) return;
         if (mediaRecord?.blob) {
             if (cardFormImageState.imageKind === 'local' && !mediaRecord.revision) {
-                mediaRecord.revision = await mediaStorage.fingerprintBlob(mediaRecord.blob);
+                mediaRecord.revision = await mediaStorage.fingerprintBlob(mediaRecord.qualityBlob || mediaRecord.blob);
                 if (formGeneration !== cardFormImageState.generation) return;
                 await mediaStorage.put(mediaRecord);
             }
@@ -224,7 +224,7 @@ async function openEditPopup(cardData) {
                 || mediaRecord.revision === safeData.imageRevision;
             if (revisionMatches) {
                 cardFormImageState.originalImageRevision = mediaRecord.revision || safeData.imageRevision || '';
-                cardFormImageState.setPreviewBlob(mediaRecord.blob);
+                cardFormImageState.setPreviewBlob(mediaRecord.qualityBlob || mediaRecord.blob);
             }
         }
     } catch (error) {
@@ -282,9 +282,12 @@ async function handleCardFormSubmit(event) {
             await mediaStorage.put({
                 id: mediaStorage.localId(cardId),
                 blob: record.blob,
+                qualityBlob: record.qualityBlob,
                 sourceType: 'local',
                 width: record.width,
                 height: record.height,
+                qualityWidth: record.qualityWidth,
+                qualityHeight: record.qualityHeight,
                 updatedAt: Date.now(),
                 revision: record.revision
             });
@@ -293,6 +296,9 @@ async function handleCardFormSubmit(event) {
 
         await dataManager.saveCard(cardData);
         cardSaved = true;
+        if (imageKind !== 'none' && typeof driveSync !== 'undefined') {
+            driveSync.notifyLocalAssetChanged();
+        }
         await renderCards();
         closeCardPopup();
         event.target.reset();

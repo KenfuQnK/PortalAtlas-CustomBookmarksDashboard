@@ -46,6 +46,11 @@ function validateBackupIntegrity(cards, wrappers, mediaRecords) {
         if (!(localRecord?.blob instanceof Blob) || localRecord.blob.size === 0) {
             throw new Error(`Backup contains an invalid local image for card ${cardId}`);
         }
+        if (localRecord.qualityBlob != null && (!(localRecord.qualityBlob instanceof Blob)
+            || localRecord.qualityBlob.size === 0
+            || !/^image\//i.test(localRecord.qualityBlob.type || ''))) {
+            throw new Error(`Backup contains an invalid high-quality image for card ${cardId}`);
+        }
         if (card.imageRevision && localRecord.revision !== card.imageRevision) {
             throw new Error(`Backup contains the wrong local image revision for card ${cardId}`);
         }
@@ -301,6 +306,7 @@ async function commitImportedBackup(prepared) {
         // untouched. Metadata keeps a complete local mirror if Sync rejects.
         await mediaStorage.replaceAll(prepared.mediaRecords);
         await storage.replaceAllData(prepared);
+        if (typeof driveSync !== 'undefined') driveSync.notifyLocalAssetChanged();
     } catch (error) {
         try {
             await mediaStorage.replaceAll(previous.mediaRecords);

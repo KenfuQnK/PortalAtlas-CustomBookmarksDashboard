@@ -62,14 +62,21 @@ const cardImageLoader = {
             }
         }
 
-        const localRevisionMatches = card.imageKind !== 'local'
+        let localRevisionMatches = card.imageKind !== 'local'
             || !card.imageRevision
             || cachedRecord?.revision === card.imageRevision;
+        if (!localRevisionMatches) cachedRecord = null;
+
+        if (!cachedRecord && mediaId && typeof driveSync !== 'undefined') {
+            cachedRecord = await driveSync.restoreCardImage(card);
+            localRevisionMatches = card.imageKind !== 'local'
+                || !card.imageRevision
+                || cachedRecord?.revision === card.imageRevision;
+        }
+
         if (cachedRecord?.blob && localRevisionMatches) {
             this._stats.cacheHits += 1;
-            this._setBlobBackground(element, cachedRecord.blob, generation);
-        } else if (!localRevisionMatches) {
-            cachedRecord = null;
+            this._setBlobBackground(element, cachedRecord.qualityBlob || cachedRecord.blob, generation);
         }
 
         if (card.imageKind === 'local') {
@@ -119,7 +126,12 @@ const cardImageLoader = {
             this._stats.maxConcurrent = Math.max(this._stats.maxConcurrent, this._active);
 
             mediaStorage.cacheRemoteImage(task.url)
-                .then(task.resolve, task.reject)
+                .then(record => {
+                    if (record.contentChanged && typeof driveSync !== 'undefined') {
+                        driveSync.notifyLocalAssetChanged();
+                    }
+                    task.resolve(record);
+                }, task.reject)
                 .finally(() => {
                     this._active -= 1;
                     this._drainQueue();

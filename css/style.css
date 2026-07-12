@@ -685,6 +685,10 @@
   .settings-section {
     margin-bottom: 20px;
   }
+
+  .settings-section-sync {
+    margin-bottom: 8px;
+  }
   
   .settings-select {
     width: 100%;
@@ -712,6 +716,180 @@
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
   }
+
+  .settings-popup-content {
+    width: 620px !important;
+    max-height: min(760px, 90vh);
+    overflow-y: auto;
+  }
+
+  .drive-settings-card {
+    border: 1px solid #dfe5ee;
+    border-radius: 14px;
+    padding: 20px;
+    color: #273142;
+    background: linear-gradient(145deg, #fff, #f7faff);
+  }
+
+  .drive-settings-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .drive-logo {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    margin-top: 1px;
+    object-fit: contain;
+  }
+
+  .drive-title-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .drive-title-row h3 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .drive-settings-heading p {
+    margin: 5px 0 0;
+    color: #5d6878;
+    font-size: .92rem;
+  }
+
+  .drive-optional-badge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #e8f1ff;
+    color: #1557a6;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .drive-benefits {
+    display: grid;
+    gap: 7px;
+    margin: 17px 0;
+    padding-left: 22px;
+    color: #384457;
+    font-size: .9rem;
+  }
+
+  .drive-benefits li::marker {
+    color: #188038;
+  }
+
+  .drive-behavior-note,
+  .drive-config-note {
+    padding: 10px 12px;
+    border-radius: 9px;
+    font-size: .82rem;
+    line-height: 1.35;
+  }
+
+  .drive-behavior-note {
+    background: #eef4fb;
+    color: #41536a;
+  }
+
+  .drive-behavior-note p {
+    margin: 0;
+  }
+
+  .drive-behavior-note p + p {
+    margin-top: 9px;
+  }
+
+  .drive-config-note {
+    margin-top: 9px;
+    background: #fff2cc;
+    color: #6f5100;
+  }
+
+  .drive-status-box {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-top: 15px;
+    padding: 12px;
+    border: 1px solid #e3e7ed;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .drive-status-dot {
+    flex: 0 0 10px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9aa0a6;
+    box-shadow: 0 0 0 4px rgba(154, 160, 166, .14);
+  }
+
+  .drive-status-dot.connected { background: #1e8e3e; box-shadow: 0 0 0 4px rgba(30, 142, 62, .14); }
+  .drive-status-dot.busy { background: #1a73e8; box-shadow: 0 0 0 4px rgba(26, 115, 232, .14); }
+  .drive-status-dot.warning { background: #f9ab00; box-shadow: 0 0 0 4px rgba(249, 171, 0, .16); }
+  .drive-status-dot.error { background: #d93025; box-shadow: 0 0 0 4px rgba(217, 48, 37, .14); }
+
+  .drive-status-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .drive-status-copy strong { font-size: .9rem; }
+  .drive-status-copy span { color: #667085; font-size: .78rem; overflow-wrap: anywhere; }
+
+  .drive-progress {
+    height: 5px;
+    margin: 8px 3px 0;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #e5eaf1;
+  }
+
+  .drive-progress-bar {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: #1a73e8;
+    transition: width .2s ease;
+  }
+
+  .drive-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .drive-primary-btn,
+  .drive-secondary-btn {
+    margin: 0;
+    padding: 10px 14px;
+    width: auto;
+  }
+
+  .drive-primary-btn { background: #1a73e8; color: #fff; }
+  .drive-primary-btn:hover { background: #155fc0; }
+  .drive-secondary-btn { background: #e8f0fe; color: #1557a6; }
+
+  .drive-link-btn {
+    margin-left: auto;
+    padding: 8px;
+    border: 0;
+    color: #b3261e;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .drive-actions button:disabled { opacity: .55; cursor: not-allowed; }
   
   /* ============================
      9. Utilities

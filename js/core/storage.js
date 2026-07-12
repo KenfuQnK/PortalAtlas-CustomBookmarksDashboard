@@ -193,18 +193,25 @@ const storage = {
         await this.initialize();
         await this._ensureWritableSnapshot();
 
+        let result;
         switch (key) {
             case CONFIG.STORAGE_KEYS.CARDS:
-                return this._replaceCards(data);
+                result = await this._replaceCards(data);
+                break;
             case CONFIG.STORAGE_KEYS.WRAPPERS:
-                return this._replaceWrappers(data);
+                result = await this._replaceWrappers(data);
+                break;
             case CONFIG.STORAGE_KEYS.WRAPPER_STATES:
-                return this._setWrapperStates(data);
+                result = await this._setWrapperStates(data);
+                break;
             case CONFIG.STORAGE_KEYS.HIGHEST_DEFAULT_NUM:
                 return this._setHighestDefaultNum(data);
             default:
                 throw new Error(`Unknown storage key: ${key}`);
         }
+
+        if (result?.changed && typeof driveSync !== 'undefined') driveSync.notifyDataChanged();
+        return result;
     },
 
     async replaceAllData({ cards, wrappers, wrapperStates = {}, highestDefaultNum = -1 }) {
@@ -361,7 +368,7 @@ const storage = {
         mediaStorage.cleanupUnused(normalizedCards).catch(error => {
             console.warn('Unable to clean unused images:', error);
         });
-        return { synced };
+        return { synced, changed: changedKeys.length > 0 || removedKeys.length > 0 };
     },
 
     async _replaceWrappers(wrappers) {
@@ -408,20 +415,22 @@ const storage = {
             synced = false;
             await this._recordSyncError(error);
         }
-        return { synced };
+        return { synced, changed: changedKeys.length > 0 || removedKeys.length > 0 };
     },
 
     async _setWrapperStates(states) {
-        this._wrapperStates = this._normalizeStates(states);
+        const nextStates = this._normalizeStates(states);
+        const changed = !this._sameData(this._wrapperStates, nextStates);
+        this._wrapperStates = nextStates;
         await this._areaSet('local', { [CONFIG.STORAGE_KEYS.V2_STATES]: this._wrapperStates });
         await this._queuePendingScalars({ [CONFIG.STORAGE_KEYS.V2_STATES]: this._wrapperStates });
         try {
             await this._writeSyncChanges({ [CONFIG.STORAGE_KEYS.V2_STATES]: this._wrapperStates }, []);
             await this._clearPendingScalars([CONFIG.STORAGE_KEYS.V2_STATES]);
-            return { synced: true };
+            return { synced: true, changed };
         } catch (error) {
             await this._recordSyncError(error);
-            return { synced: false };
+            return { synced: false, changed };
         }
     },
 

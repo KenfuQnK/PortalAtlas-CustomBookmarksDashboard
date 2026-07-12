@@ -163,7 +163,7 @@
     </div>
 
     <div id="popup-form-settings" class="popup-form">
-        <div class="popup-content popup-content-small">
+        <div class="popup-content popup-content-small settings-popup-content">
             <span id="close-popup-settings" class="close-popup" data-i18n-title="close">×</span>
             <h2 class="settings-title" data-i18n="settings">Settings</h2>
             <div class="settings-section">
@@ -175,6 +175,57 @@
                     <option value="de">Deutsch</option>
                 </select>
             </div>
+            <div class="settings-section settings-section-sync">
+                <label data-i18n="synchronization">Synchronization:</label>
+            </div>
+            <section class="drive-settings-card" aria-labelledby="drive-settings-title">
+                <div class="drive-settings-heading">
+                    <img class="drive-logo" src="icons/Google_Drive_Logo.png" alt="" aria-hidden="true">
+                    <div>
+                        <div class="drive-title-row">
+                            <h3 id="drive-settings-title" data-i18n="drive_title">Google Drive</h3>
+                            <span class="drive-optional-badge" data-i18n="drive_optional">Optional</span>
+                        </div>
+                        <p data-i18n="drive_subtitle">Sync Portal Atlas with your Google Drive account to enjoy better features:</p>
+                    </div>
+                </div>
+
+                <ul class="drive-benefits">
+                    <li data-i18n="drive_benefit_devices">Sync your custom bookmarks across all your devices.</li>
+                    <li data-i18n="drive_benefit_quality">Keep a sharper copy of each image.</li>
+                    <li data-i18n="drive_benefit_offline">Create and save more customized cards.</li>
+                </ul>
+
+                <div class="drive-behavior-note">
+                    <p data-i18n="drive_behavior_note_storage">Google Chrome extensions have very limited local storage. Therefore, synchronizing with Google Drive is recommended because it greatly expands storage capacity.</p>
+                    <p>
+                        <strong>Portal Atlas</strong>
+                        <span data-i18n="drive_behavior_note_private">only stores a private copy of your custom images in your Drive and</span>
+                        <!-- <strong data-i18n="drive_behavior_note_no_access">has no access</strong> -->
+                         <span data-i18n="drive_behavior_note_no_access">has no access</span>
+                        <span data-i18n="drive_behavior_note_files">to the rest of your personal Google Drive files.</span>
+                    </p>
+                </div>
+                <div id="drive-config-note" class="drive-config-note" hidden data-i18n="drive_not_configured">
+                    This build still needs its publisher OAuth Client ID before Drive can be connected.
+                </div>
+
+                <div class="drive-status-box" aria-live="polite">
+                    <span id="drive-status-dot" class="drive-status-dot"></span>
+                    <div class="drive-status-copy">
+                        <strong id="drive-status-text" data-i18n="drive_status_disconnected">Not connected</strong>
+                        <span id="drive-status-detail" data-i18n="drive_status_disconnected_detail">Portal Atlas works normally without Drive.</span>
+                    </div>
+                </div>
+                <div id="drive-progress" class="drive-progress" hidden>
+                    <div id="drive-progress-bar" class="drive-progress-bar"></div>
+                </div>
+                <div class="drive-actions">
+                    <button type="button" id="drive-connect-btn" class="btn drive-primary-btn" data-i18n="drive_connect">Connect Google Drive</button>
+                    <button type="button" id="drive-sync-btn" class="btn drive-secondary-btn" data-i18n="drive_sync_now" hidden>Sync now</button>
+                    <button type="button" id="drive-disconnect-btn" class="drive-link-btn" data-i18n="drive_disconnect" hidden>Disconnect</button>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -191,6 +242,9 @@
     <script src="js/core/mediaStorage.js"></script>
     <script src="js/core/storage.js"></script>
     <script src="js/core/dataManager.js"></script>
+
+    <!-- Optional private image synchronization through Google Drive -->
+    <script src="js/services/driveSync.js"></script>
 
     <!-- Load the UI -->
     <script src="js/ui/cards.js"></script>

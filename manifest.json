@@ -5,9 +5,17 @@
     "description": "Custom Bookmarks Dashboard",
     "permissions": [
       "downloads",
+      "identity",
       "storage",
       "unlimitedStorage"
     ],
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAk0NtyN+2TIB3y3RaI9YYUeplwXGwTF7uNDSVP3/A1wVA6cQkQvGIlr5xjR7j18KEHCIEz/Fl1nWA0cVqNyWUe5xf6Sv/SuAiw1X8dAFMTqHlLopJbVRpDGtNMtlC5CI9NDVyDhiK+HiGLEP2jy5LM/NqgfnAY0L+TQshFDZsvnIlviYJrex8TrDJ8Tqg4zHWsEnQQzziUGrKt69J9S6WagLmdFG2mmKBQcDGiap0vvmZWgJLRsCLLWhzXNj91iXqUgiP7JnqK0vKymjyi8hoPOmzyT+sv/TWbZr3AbfsoUBXezdiVoDOteJ8rVA7ULUTxG+2LWPNiA3/uiguHcY3vwIDAQAB",
+    "oauth2": {
+        "client_id": "280534041396-pvremqm026mhqgcsn848p3djmo3mcjiv.apps.googleusercontent.com",
+        "scopes": [
+            "https://www.googleapis.com/auth/drive.appdata"
+        ]
+    },
     "host_permissions": [
         "<all_urls>"
     ],

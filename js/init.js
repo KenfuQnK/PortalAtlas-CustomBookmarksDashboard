@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", async function() {
             
             languageSelector.addEventListener('change', async (e) => {
                 await window.i18n.setLanguage(e.target.value);
+                updateDriveSettingsUI();
             });
         }
 
@@ -42,8 +43,24 @@ document.addEventListener("DOMContentLoaded", async function() {
         setupExportImport();
         setupSettingsModal();
 
+        // Drive is deliberately initialized after the local dashboard is
+        // usable. Authorization and network failures can never block startup.
+        driveSync.initialize().catch(error => {
+            console.warn('Optional Google Drive sync could not initialize:', error);
+        });
+
         let remoteRenderScheduled = false;
         window.addEventListener('portal-atlas-data-changed', () => {
+            driveSync.notifyDataChanged();
+            if (remoteRenderScheduled) return;
+            remoteRenderScheduled = true;
+            requestAnimationFrame(async () => {
+                remoteRenderScheduled = false;
+                await renderWrappers();
+            });
+        });
+
+        window.addEventListener('portal-atlas-drive-images-changed', () => {
             if (remoteRenderScheduled) return;
             remoteRenderScheduled = true;
             requestAnimationFrame(async () => {

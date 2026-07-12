@@ -31,6 +31,10 @@ const CONFIG = {
         // multi-megapixel source image.
         MAX_DIMENSION: 400,
         WEBP_QUALITY: 0.8,
+        // The preview stays deliberately small for fast first paint. This
+        // larger derivative is the offline/Drive copy used once available.
+        QUALITY_MAX_DIMENSION: 1600,
+        QUALITY_WEBP_QUALITY: 0.9,
         LOAD_CONCURRENCY: 4,
         LAZY_ROOT_MARGIN: '300px'
     },
@@ -39,6 +43,14 @@ const CONFIG = {
         QUOTA_BYTES_PER_ITEM: 8192,
         MAX_ITEMS: 512,
         SAFE_TOTAL_BYTES: 96 * 1024
+    },
+    DRIVE: {
+        STATE_KEY: 'pa:drive-state',
+        ENABLED_SYNC_KEY: 'pa:drive-enabled',
+        SCOPE: 'https://www.googleapis.com/auth/drive.appdata',
+        API_ROOT: 'https://www.googleapis.com/drive/v3',
+        UPLOAD_ROOT: 'https://www.googleapis.com/upload/drive/v3',
+        FILE_PREFIX: 'portal-atlas-'
     },
     DEFAULT_VALUES: {
         ID: '',
