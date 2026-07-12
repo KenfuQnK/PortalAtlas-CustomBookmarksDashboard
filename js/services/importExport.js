@@ -107,27 +107,6 @@ async function readCurrentExportSnapshot() {
     };
 }
 
-async function readLegacyExportSnapshot(localItems, syncItems) {
-    await mediaStorage.initialize();
-    const migration = await mediaStorage.migrateLegacyPreviews(
-        localItems[CONFIG.STORAGE_KEYS.CARDS] || []
-    );
-    return {
-        cards: migration.cards,
-        wrappers: syncItems[CONFIG.STORAGE_KEYS.WRAPPERS] || [],
-        wrapperStates: syncItems[CONFIG.STORAGE_KEYS.WRAPPER_STATES] || {},
-        highestDefaultNum: localItems[CONFIG.STORAGE_KEYS.HIGHEST_DEFAULT_NUM] ?? -1,
-        allMedia: migration.records,
-        language: resolveExportLanguage(syncItems.language)
-    };
-}
-
-function resolveExportLanguage(savedLanguage) {
-    if (savedLanguage) return savedLanguage;
-    const browserLanguage = navigator.language.split('-')[0];
-    return ['en', 'es', 'fr', 'de'].includes(browserLanguage) ? browserLanguage : 'en';
-}
-
 async function exportData() {
     try {
         await downloadExportBackup();
@@ -162,124 +141,19 @@ async function serializeBackup(payload) {
 
 function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
-    return new Promise((resolve, reject) => {
-        let downloadId = null;
-        let settled = false;
-        const timeout = setTimeout(() => finish(new Error('The backup download did not finish in time')), 5 * 60 * 1000);
-
-        const cleanup = () => {
-            clearTimeout(timeout);
-            chrome.downloads.onChanged.removeListener(onChanged);
-            URL.revokeObjectURL(url);
-        };
-        const finish = (error = null) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            if (error) reject(error);
-            else resolve(downloadId);
-        };
-        const onChanged = delta => {
-            if (!downloadId || delta.id !== downloadId) return;
-            if (delta.state?.current === 'complete') finish();
-            if (delta.state?.current === 'interrupted') {
-                finish(new Error(delta.error?.current || 'The backup download was interrupted'));
-            }
-        };
-
-        chrome.downloads.onChanged.addListener(onChanged);
-        chrome.downloads.download({ url, filename, saveAs: false }, acceptedId => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-                finish(new Error(error.message));
-                return;
-            }
-            if (!Number.isInteger(acceptedId)) {
-                finish(new Error('Chrome did not confirm the backup download'));
-                return;
-            }
-            // The download callback only confirms that Chrome accepted the
-            // request. Migration waits for the actual file to finish writing.
-            // The search also closes the small race where a tiny file finishes
-            // before the callback assigns its id.
-            downloadId = Number(acceptedId);
-            chrome.downloads.search({ id: downloadId }, items => {
-                const searchError = chrome.runtime.lastError;
-                if (searchError) {
-                    finish(new Error(searchError.message));
-                    return;
-                }
-                const item = items?.[0];
-                if (item?.state === 'complete') finish();
-                if (item?.state === 'interrupted') {
-                    finish(new Error(item.error || 'The backup download was interrupted'));
-                }
-            });
-        });
-    });
-}
-
-async function ensureV2MigrationBackup({ beforeMigrationOnly = false } = {}) {
-    const run = async () => {
-        const localItems = await getChromeStorage('local');
-        const previousBackup = localItems[CONFIG.STORAGE_KEYS.V2_MIGRATION_BACKUP];
-        if (previousBackup?.version === CONFIG.SCHEMA_VERSION && previousBackup.completedAt) {
-            return false;
-        }
-
-        const syncItems = await getChromeStorage('sync');
-        const hasLegacyData = (Array.isArray(localItems[CONFIG.STORAGE_KEYS.CARDS])
-            && localItems[CONFIG.STORAGE_KEYS.CARDS].length > 0
-            || Array.isArray(syncItems[CONFIG.STORAGE_KEYS.WRAPPERS])
-            && syncItems[CONFIG.STORAGE_KEYS.WRAPPERS].length > 0);
-        const hasV2Data = localItems[CONFIG.STORAGE_KEYS.V2_SCHEMA] === CONFIG.SCHEMA_VERSION
-            || syncItems[CONFIG.STORAGE_KEYS.V2_SCHEMA] === CONFIG.SCHEMA_VERSION;
-        const needsPreMigrationBackup = hasLegacyData && !hasV2Data;
-
-        if (beforeMigrationOnly && !needsPreMigrationBackup) return false;
-
-        const snapshot = needsPreMigrationBackup
-            ? await readLegacyExportSnapshot(localItems, syncItems)
-            : null;
-        const downloadId = await downloadExportBackup(snapshot);
-
-        // Persist success only after chrome.downloads returned a valid id.
-        await setChromeStorage('local', {
-            [CONFIG.STORAGE_KEYS.V2_MIGRATION_BACKUP]: {
-                version: CONFIG.SCHEMA_VERSION,
-                downloadId,
-                completedAt: new Date().toISOString()
-            }
-        });
-        return true;
-    };
-
-    // Multiple new tabs can start together. The lock is only coordination;
-    // correctness and retry behavior depend on the persistent local marker.
-    if (navigator.locks?.request) {
-        return navigator.locks.request('portal-atlas-v2-migration-backup', run);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.hidden = true;
+    document.body.appendChild(anchor);
+    try {
+        anchor.click();
+    } finally {
+        anchor.remove();
+        // Keep the object URL alive long enough for Chrome to begin reading it.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
-    return run();
-}
-
-function getChromeStorage(areaName) {
-    return new Promise((resolve, reject) => {
-        chrome.storage[areaName].get(null, result => {
-            const error = chrome.runtime.lastError;
-            if (error) reject(new Error(error.message));
-            else resolve(result);
-        });
-    });
-}
-
-function setChromeStorage(areaName, values) {
-    return new Promise((resolve, reject) => {
-        chrome.storage[areaName].set(values, () => {
-            const error = chrome.runtime.lastError;
-            if (error) reject(new Error(error.message));
-            else resolve();
-        });
-    });
+    return filename;
 }
 
 async function importData(event) {

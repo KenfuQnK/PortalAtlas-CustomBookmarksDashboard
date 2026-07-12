@@ -77,7 +77,6 @@ _Privacy note: Portal Atlas has no developer-operated backend, analytics, or adv
 ## Permission rationale
 
 - `<all_urls>` is intentional and required by the core feature that lets users fetch and cache a card image from any URL they choose. Portal Atlas does not inject scripts into those sites or read their page content.
-- `downloads` creates manual exports and the one-time safety backup made before migrating existing v1 data.
 - `identity` authorizes the optional Google Drive integration.
 - `storage` and `unlimitedStorage` keep dashboard metadata and user-selected images available locally.
 

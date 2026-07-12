@@ -18,7 +18,6 @@ const CONFIG = {
         V2_STATES: 'pa:s',
         V2_HIGHEST_DEFAULT_NUM: 'pa:h',
         V2_SYNC_STATUS: 'pa:sync-status',
-        V2_MIGRATION_BACKUP: 'pa:v2-backup',
         CARD_PREFIX: 'pa:c:',
         WRAPPER_PREFIX: 'pa:w:'
     },

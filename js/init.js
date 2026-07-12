@@ -1,10 +1,6 @@
 // Initialization
 document.addEventListener("DOMContentLoaded", async function() {
     try {
-        // Existing v1 data must be backed up before storage.initialize() can
-        // migrate it or remove the legacy keys after a successful Sync write.
-        await ensureV2MigrationBackup({ beforeMigrationOnly: true });
-
         // Prepare the v2 local mirror, migrate v1 data and hydrate Chrome Sync
         // before any UI reads the dashboard.
         await storage.initialize();
