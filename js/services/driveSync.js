@@ -209,7 +209,7 @@ const driveSync = {
             this._state.progressDone = 0;
             this._state.progressTotal = descriptors.length + staleFiles.length;
             this._emitStatus();
-            let changedLocalImages = false;
+            const changedLocalCardIds = new Set();
 
             for (const item of descriptors) {
                 const mediaId = mediaStorage.getIdForCard(item.card);
@@ -230,7 +230,7 @@ const driveSync = {
                 } else if (!record && file) {
                     const restored = await this._downloadRecord(item.card, file);
                     recordsById.set(restored.id, restored);
-                    changedLocalImages = true;
+                    changedLocalCardIds.add(item.card.id);
                 } else if (record && file) {
                     const localRevision = record.contentRevision || await mediaStorage.fingerprintBlob(
                         record.qualityBlob || record.blob
@@ -251,7 +251,7 @@ const driveSync = {
                         } else {
                             const restored = await this._downloadRecord(item.card, file);
                             recordsById.set(restored.id, restored);
-                            changedLocalImages = true;
+                            changedLocalCardIds.add(item.card.id);
                         }
                     }
                 }
@@ -273,10 +273,16 @@ const driveSync = {
             this._state.needsSync = false;
             await this._persistState();
             this._setStatus('synced');
-            if (changedLocalImages) {
-                window.dispatchEvent(new CustomEvent('portal-atlas-drive-images-changed'));
+            if (changedLocalCardIds.size > 0) {
+                window.dispatchEvent(new CustomEvent('portal-atlas-drive-images-changed', {
+                    detail: { cardIds: [...changedLocalCardIds] }
+                }));
             }
-            return { total: descriptors.length, deleted: staleFiles.length, restored: changedLocalImages };
+            return {
+                total: descriptors.length,
+                deleted: staleFiles.length,
+                restored: changedLocalCardIds.size > 0
+            };
         } catch (error) {
             this._state.needsSync = true;
             await this._persistState();

@@ -15,9 +15,11 @@ function createWrapper(wrapperData, isExpanded) {
         <svg class="svg-snoweb svg-theme-light" height="50" preserveaspectratio="xMidYMid meet" viewbox="0 -12 100 100" width="100" x="0" xmlns="http://www.w3.org/2000/svg" y="0">
             <path class="svg-fill-primary" d="M14.5,29.6a7.5,7.5,0,0,1,10.7,0L50,54.4,74.8,29.6A7.5,7.5,0,1,1,85.5,40.2L55.3,70.4a7.4,7.4,0,0,1-10.6,0L14.5,40.2A7.5,7.5,0,0,1,14.5,29.6Z" fill-rule="evenodd"></path>
         </svg></span>`;
-    sectionHeader.appendChild(document.createTextNode(wrapperData.name));
+    const nameNode = document.createTextNode(wrapperData.name);
+    sectionHeader.appendChild(nameNode);
+    sectionHeader.__portalAtlasNameNode = nameNode;
 
-    sectionHeader.onclick = () => toggleSection(wrapperData.id); // Add click event to toggle the section
+    sectionHeader.onclick = () => toggleSection(wrapperDiv.id); // Add click event to toggle the section
 
     const sectionContent = document.createElement('section'); // Create a section for the content
     sectionContent.className = `section-content ${expanded ? 'show' : ''}`; // Set class based on expanded state
@@ -33,30 +35,51 @@ function createWrapper(wrapperData, isExpanded) {
 
     sectionHeader.addEventListener('contextmenu', function(event) { // Add context menu event to the header
         event.preventDefault(); // Prevent default context menu
-        openEditWrapperPopup(wrapperData); // Open the edit popup for the wrapper
+        openEditWrapperPopup(wrapperDiv.__portalAtlasWrapper); // Open the edit popup for the wrapper
     });
 
-    return wrapperDiv; // Return the constructed wrapper element
+    return updateWrapperElement(wrapperDiv, wrapperData, expanded); // Return the constructed wrapper element
+}
+
+function updateWrapperElement(wrapperElement, wrapperData, isExpanded) {
+    wrapperElement.id = wrapperData.id;
+    wrapperElement.__portalAtlasWrapper = wrapperData;
+    const sectionHeader = wrapperElement.querySelector('.section-header');
+    if (sectionHeader?.__portalAtlasNameNode) {
+        sectionHeader.__portalAtlasNameNode.nodeValue = wrapperData.name;
+    }
+    setSectionExpanded(wrapperElement, Boolean(isExpanded), false);
+    return wrapperElement;
 }
 
 async function renderWrappers() {
     const mainContainer = document.getElementById('main-container'); // Get the main container element
     destroySortables();
-    cardImageLoader.reset();
     const wrappers = await dataManager.getAllWrappers(); // Fetch all wrappers from the data manager
     const states = await dataManager.getWrapperStates(); // Fetch the states of the wrappers
-    const fragment = document.createDocumentFragment();
+    const existingWrappers = new Map(
+        [...mainContainer.querySelectorAll(':scope > .wrapper')].map(element => [element.id, element])
+    );
+    const renderedIds = new Set();
 
-    wrappers
+    const wrapperElements = wrappers
         .sort((a, b) => (a.order || 0) - (b.order || 0)) // Sort wrappers by order
-        .forEach(wrapperData => {
+        .map(wrapperData => {
             // Check if this wrapper was expanded
             const isExpanded = Boolean(states[wrapperData.id]); // Determine if the wrapper should be expanded based on its state
-            const wrapperElement = createWrapper(wrapperData, isExpanded); // Create the wrapper element
-            fragment.appendChild(wrapperElement); // Append the wrapper element to the main container
+            renderedIds.add(wrapperData.id);
+            const existing = existingWrappers.get(wrapperData.id);
+            return existing
+                ? updateWrapperElement(existing, wrapperData, isExpanded)
+                : createWrapper(wrapperData, isExpanded); // Create the wrapper element
         });
 
-    mainContainer.replaceChildren(fragment);
+    placeElementsInOrder(mainContainer, wrapperElements);
+    existingWrappers.forEach((wrapperElement, id) => {
+        if (renderedIds.has(id)) return;
+        wrapperElement.querySelectorAll('.card').forEach(card => cardImageLoader.release(card));
+        wrapperElement.remove();
+    });
 
     await renderCards(); // Render the cards within the wrappers
     setupSortable(); // Set up sortable functionality for the wrappers

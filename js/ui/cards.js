@@ -5,6 +5,7 @@ const cardImageLoader = {
     _generation: 0,
     _objectUrls: new Map(),
     _remotePromises: new Map(),
+    _remoteBackgrounds: new WeakMap(),
     _stats: { observed: 0, cacheHits: 0, remoteRequests: 0, maxConcurrent: 0 },
 
     reset() {
@@ -16,15 +17,29 @@ const cardImageLoader = {
         // forever when a card edit triggers a rerender.
         this._objectUrls.forEach(url => URL.revokeObjectURL(url));
         this._objectUrls.clear();
+        this._remoteBackgrounds = new WeakMap();
         this._stats = { observed: 0, cacheHits: 0, remoteRequests: 0, maxConcurrent: 0 };
+    },
+
+    release(element) {
+        if (!element) return;
+        element.__portalAtlasImageVersion = (element.__portalAtlasImageVersion || 0) + 1;
+        this._observer?.unobserve(element);
+        const objectUrl = this._objectUrls.get(element);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        this._objectUrls.delete(element);
+        this._remoteBackgrounds.delete(element);
     },
 
     observe(element, card) {
         this._stats.observed += 1;
         const generation = this._generation;
+        const imageVersion = (element.__portalAtlasImageVersion || 0) + 1;
+        element.__portalAtlasImageVersion = imageVersion;
+        this._remoteBackgrounds.delete(element);
 
         if (!('IntersectionObserver' in window)) {
-            this._load(element, card, generation);
+            this._load(element, card, generation, imageVersion);
             return;
         }
 
@@ -35,7 +50,8 @@ const cardImageLoader = {
                     if (!entry.isIntersecting || !entry.target.isConnected) return;
                     observer.unobserve(entry.target);
                     const observedCard = entry.target.__portalAtlasCard;
-                    this._load(entry.target, observedCard, observerGeneration);
+                    this._load(entry.target, observedCard, observerGeneration,
+                        entry.target.__portalAtlasImageVersion);
                 });
             }, {
                 root: document.getElementById('main-container'),
@@ -49,8 +65,8 @@ const cardImageLoader = {
         this._observer.observe(element);
     },
 
-    async _load(element, card, generation) {
-        if (!element || !card || generation !== this._generation) return;
+    async _load(element, card, generation, imageVersion) {
+        if (!this._isCurrent(element, generation, imageVersion) || !card) return;
 
         const mediaId = mediaStorage.getIdForCard(card);
         const driveState = typeof driveSync !== 'undefined' ? driveSync.getState() : null;
@@ -79,7 +95,8 @@ const cardImageLoader = {
         if (cachedRecord?.blob && localRevisionMatches) {
             this._stats.cacheHits += 1;
             this._setBlobBackground(element,
-                cachedRecord.displayBlob || cachedRecord.qualityBlob || cachedRecord.blob, generation);
+                cachedRecord.displayBlob || cachedRecord.qualityBlob || cachedRecord.blob,
+                generation, imageVersion);
         }
 
         if (card.imageKind === 'local') {
@@ -88,8 +105,8 @@ const cardImageLoader = {
                 element.title = window.i18n.translate('local_image_missing');
             } else if (driveAvailable && !cachedRecord.qualityBlob && !cachedRecord.displayBlob) {
                 const driveRecord = await driveSync.restoreCardImage(card);
-                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
-                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                if (driveRecord?.displayBlob) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation, imageVersion);
                 }
             }
             return;
@@ -97,12 +114,16 @@ const cardImageLoader = {
 
         const remoteUrl = mediaStorage.normalizeUrl(card.backgroundImage);
         if (!remoteUrl) return;
+        // The cached derivative is only a fast/offline placeholder. Once the
+        // source URL loads successfully, keep the original-resolution image
+        // as the final background and never replace it with a smaller blob.
+        this._preloadRemoteBackground(element, remoteUrl, generation, imageVersion);
         const lastCheckedAt = Number(cachedRecord?.lastCheckedAt || cachedRecord?.updatedAt) || 0;
         if (cachedRecord?.blob && Date.now() - lastCheckedAt < CONFIG.MEDIA.REMOTE_REVALIDATE_MS) {
             if (driveAvailable && !cachedRecord.qualityBlob && !cachedRecord.displayBlob) {
                 const driveRecord = await driveSync.restoreCardImage(card);
-                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
-                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                if (driveRecord?.displayBlob && !this._hasRemoteBackground(element, remoteUrl)) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation, imageVersion);
                 }
             }
             return;
@@ -110,8 +131,9 @@ const cardImageLoader = {
 
         try {
             const record = await this._enqueueRemote(remoteUrl, driveAvailable);
-            if (generation === this._generation && element.isConnected) {
-                this._setBlobBackground(element, record.displayBlob || record.blob, generation);
+            if (!this._hasRemoteBackground(element, remoteUrl)) {
+                this._setBlobBackground(element, record.displayBlob || record.blob,
+                    generation, imageVersion);
             }
         } catch (error) {
             // Keep the last valid cached copy and avoid hammering a dead or
@@ -125,15 +147,14 @@ const cardImageLoader = {
             }
             if (driveAvailable) {
                 const driveRecord = await driveSync.restoreCardImage(card);
-                if (driveRecord?.displayBlob && generation === this._generation && element.isConnected) {
-                    this._setBlobBackground(element, driveRecord.displayBlob, generation);
+                if (driveRecord?.displayBlob && !this._hasRemoteBackground(element, remoteUrl)) {
+                    this._setBlobBackground(element, driveRecord.displayBlob, generation, imageVersion);
                     return;
                 }
             }
             // Some hosts prevent a fetch/canvas conversion even though a CSS
             // background is displayable. Probe the original URL, but keep the
             // existing Blob preview until the browser confirms it has loaded.
-            this._preloadRemoteBackground(element, remoteUrl, generation);
             console.warn('Unable to cache remote image:', remoteUrl, error);
         }
     },
@@ -173,31 +194,44 @@ const cardImageLoader = {
         }
     },
 
-    _setBlobBackground(element, blob, generation) {
-        if (generation !== this._generation || !element.isConnected) return;
+    _isCurrent(element, generation, imageVersion) {
+        return Boolean(element)
+            && generation === this._generation
+            && element.isConnected
+            && element.__portalAtlasImageVersion === imageVersion;
+    },
+
+    _hasRemoteBackground(element, remoteUrl) {
+        return this._remoteBackgrounds.get(element) === remoteUrl;
+    },
+
+    _setBlobBackground(element, blob, generation, imageVersion) {
+        if (!this._isCurrent(element, generation, imageVersion)) return;
         const previousUrl = this._objectUrls.get(element);
         if (previousUrl) URL.revokeObjectURL(previousUrl);
         const objectUrl = URL.createObjectURL(blob);
         this._objectUrls.set(element, objectUrl);
+        this._remoteBackgrounds.delete(element);
         element.style.backgroundImage = `url(${JSON.stringify(objectUrl)})`;
         element.classList.remove('card-image-missing');
         if (element.title === window.i18n.translate('local_image_missing')) element.removeAttribute('title');
     },
 
-    _setRemoteBackground(element, remoteUrl, generation) {
-        if (generation !== this._generation || !element.isConnected) return;
+    _setRemoteBackground(element, remoteUrl, generation, imageVersion) {
+        if (!this._isCurrent(element, generation, imageVersion)) return;
         const previousUrl = this._objectUrls.get(element);
         if (previousUrl) URL.revokeObjectURL(previousUrl);
         this._objectUrls.delete(element);
+        this._remoteBackgrounds.set(element, remoteUrl);
         element.style.backgroundImage = `url(${JSON.stringify(remoteUrl)})`;
     },
 
-    _preloadRemoteBackground(element, remoteUrl, generation) {
-        if (generation !== this._generation || !element.isConnected) return;
+    _preloadRemoteBackground(element, remoteUrl, generation, imageVersion) {
+        if (!this._isCurrent(element, generation, imageVersion)) return;
         const probe = new Image();
         probe.decoding = 'async';
         probe.onload = () => {
-            this._setRemoteBackground(element, remoteUrl, generation);
+            this._setRemoteBackground(element, remoteUrl, generation, imageVersion);
         };
         probe.onerror = () => {
             // Intentionally do nothing: the last valid Blob remains visible.
@@ -210,10 +244,20 @@ const cardImageLoader = {
     }
 };
 
-function createCard(cardData) {
-    const anchor = document.createElement('a');
+function getCardImageSignature(cardData) {
+    const imageKind = cardData.imageKind
+        || (mediaStorage.normalizeUrl(cardData.backgroundImage) ? 'url' : 'none');
+    if (imageKind === 'local') return `local:${cardData.id}:${cardData.imageRevision || 'legacy'}`;
+    if (imageKind === 'url') return `url:${mediaStorage.normalizeUrl(cardData.backgroundImage)}`;
+    return 'none';
+}
+
+function updateCardElement(anchor, cardData, forceImage = false) {
+    const previousSignature = anchor.__portalAtlasImageSignature;
+    const nextSignature = getCardImageSignature(cardData);
+
     anchor.className = `card ${cardData.size}`;
-    anchor.id = cardData.id || generateUUID();
+    anchor.id = cardData.id || anchor.id || generateUUID();
     anchor.href = cardData.link;
     anchor.textContent = cardData.showName !== false ? cardData.name : ' ';
     anchor.style.backgroundSize = cardData.backgroundImageSize;
@@ -221,21 +265,48 @@ function createCard(cardData) {
 
     const [x, y] = (cardData.backgroundPosition || '50,50').split(',');
     anchor.style.backgroundPosition = `${x}% ${y}%`;
+    anchor.__portalAtlasCard = cardData;
 
-    anchor.addEventListener('contextmenu', async event => {
-        event.preventDefault();
-        await openEditPopup(cardData);
-    });
+    if (previousSignature === undefined || forceImage || previousSignature !== nextSignature) {
+        if (previousSignature !== undefined) cardImageLoader.release(anchor);
+        anchor.__portalAtlasImageSignature = nextSignature;
+        anchor.style.backgroundImage = 'none';
+        anchor.classList.remove('card-image-missing');
+        anchor.removeAttribute('title');
+        if (nextSignature !== 'none') cardImageLoader.observe(anchor, cardData);
+    }
 
-    cardImageLoader.observe(anchor, cardData);
     return anchor;
 }
 
-async function renderCards() {
-    cardImageLoader.reset();
+function createCard(cardData, forceImage = false) {
+    const anchor = document.createElement('a');
+    anchor.addEventListener('contextmenu', async event => {
+        event.preventDefault();
+        await openEditPopup(anchor.__portalAtlasCard);
+    });
+    return updateCardElement(anchor, cardData, forceImage);
+}
+
+function placeElementsInOrder(container, elements) {
+    let cursor = container.firstElementChild;
+    elements.forEach(element => {
+        if (element === cursor) {
+            cursor = cursor.nextElementSibling;
+            return;
+        }
+        container.insertBefore(element, cursor);
+    });
+}
+
+async function renderCards({ forceImageIds = new Set() } = {}) {
     const wrappers = document.querySelectorAll('.wrapper');
     const cardsData = await dataManager.getAllCards();
     const cardsByWrapper = new Map();
+    const existingCards = new Map(
+        [...document.querySelectorAll('.wrapper .card')].map(element => [element.id, element])
+    );
+    const renderedIds = new Set();
 
     cardsData.forEach(card => {
         if (!cardsByWrapper.has(card.wrapperId)) cardsByWrapper.set(card.wrapperId, []);
@@ -246,11 +317,22 @@ async function renderCards() {
         const container = wrapper.querySelector('.container');
         if (!container) return;
 
-        const fragment = document.createDocumentFragment();
         const cards = cardsByWrapper.get(wrapper.id) || [];
         cards.sort((left, right) => (left.order || 0) - (right.order || 0));
-        cards.forEach(card => fragment.appendChild(createCard(card)));
-        container.replaceChildren(fragment);
+        const elements = cards.map(card => {
+            renderedIds.add(card.id);
+            const existing = existingCards.get(card.id);
+            return existing
+                ? updateCardElement(existing, card, forceImageIds.has(card.id))
+                : createCard(card);
+        });
+        placeElementsInOrder(container, elements);
+    });
+
+    existingCards.forEach((element, id) => {
+        if (renderedIds.has(id)) return;
+        cardImageLoader.release(element);
+        element.remove();
     });
 }
 
@@ -299,27 +381,18 @@ function updateCardPreview() {
 
     const imageInput = document.getElementById('card-background-image');
     const [x, y] = (imageInput.dataset.position || '50,50').split(',').map(Number);
-    preview.style.backgroundPosition = `${x}% ${y}%`;
-}
+    const [safeX, safeY] = parseImagePosition(`${x},${y}`);
+    imageInput.dataset.position = `${safeX},${safeY}`;
+    preview.style.backgroundPosition = `${safeX}% ${safeY}%`;
 
-function captureCardPreviewDimensions(cardId, cardSize) {
-    const preview = document.getElementById('card-preview');
-    const card = cardId ? document.getElementById(cardId) : null;
-    const bounds = card?.getBoundingClientRect();
-
-    if (!preview || !bounds || bounds.width <= 0 || bounds.height <= 0) {
-        clearCardPreviewDimensions();
-        return;
-    }
-
-    preview.dataset.sourceSize = cardSize || '';
-    preview.dataset.sourceAspectRatio = String(bounds.width / bounds.height);
+    const imageSource = localPreviewUrl || backgroundImage.trim();
+    updateCardPreviewImageMetrics(preview, imageSource);
 }
 
 function clearCardPreviewDimensions() {
     const preview = document.getElementById('card-preview');
     if (!preview) return;
-    delete preview.dataset.sourceSize;
+    delete preview.dataset.geometryKey;
     delete preview.dataset.sourceAspectRatio;
 }
 
@@ -329,47 +402,178 @@ function updateCardPreviewDimensions(preview, cardSize) {
         'card-wide': 2,
         'card-big': 1
     };
-    const capturedRatio = Number.parseFloat(preview.dataset.sourceAspectRatio);
-    const useCapturedRatio = preview.dataset.sourceSize === cardSize
-        && Number.isFinite(capturedRatio)
-        && capturedRatio > 0;
-    const ratio = useCapturedRatio ? capturedRatio : (defaultRatios[cardSize] || 1);
-    const maxWidth = 240;
-    const maxHeight = 240;
+    const maxDimensions = cardSize === 'card-small'
+        ? { width: 120, height: 120 }
+        : { width: 250, height: 250 };
+    const ratio = measureCardPreviewAspectRatio(preview, cardSize)
+        || defaultRatios[cardSize]
+        || 1;
 
     if (ratio >= 1) {
-        preview.style.width = `${maxWidth}px`;
-        preview.style.height = `${maxWidth / ratio}px`;
+        preview.style.width = `${maxDimensions.width}px`;
+        preview.style.height = `${Math.max(1, Math.round(maxDimensions.width / ratio))}px`;
     } else {
-        preview.style.width = `${maxHeight * ratio}px`;
-        preview.style.height = `${maxHeight}px`;
+        preview.style.width = `${Math.max(1, Math.round(maxDimensions.height * ratio))}px`;
+        preview.style.height = `${maxDimensions.height}px`;
     }
+}
+
+function measureCardPreviewAspectRatio(preview, cardSize) {
+    const cardId = document.getElementById('card-id')?.value || '';
+    const wrapperId = document.getElementById('card-wrapper')?.value || '';
+    const targetContainer = document.getElementById(wrapperId)?.querySelector('.container');
+    if (!targetContainer) return 0;
+
+    const geometryKey = [
+        cardId,
+        wrapperId,
+        cardSize,
+        targetContainer.clientWidth,
+        targetContainer.childElementCount
+    ].join(':');
+    const cachedRatio = Number.parseFloat(preview.dataset.sourceAspectRatio);
+    if (preview.dataset.geometryKey === geometryKey
+        && Number.isFinite(cachedRatio)
+        && cachedRatio > 0) {
+        return cachedRatio;
+    }
+
+    const existingCard = cardId ? document.getElementById(cardId) : null;
+    const canMeasureExisting = existingCard?.closest('.container') === targetContainer;
+    const measuredCard = canMeasureExisting ? existingCard : document.createElement('div');
+    const originalClassName = measuredCard.className;
+    let appendedProbe = false;
+
+    try {
+        measuredCard.className = `card ${cardSize}`;
+        if (!canMeasureExisting) {
+            measuredCard.style.visibility = 'hidden';
+            measuredCard.style.pointerEvents = 'none';
+            targetContainer.appendChild(measuredCard);
+            appendedProbe = true;
+        }
+
+        const width = measuredCard.offsetWidth;
+        const height = measuredCard.offsetHeight;
+        if (width <= 0 || height <= 0) return 0;
+
+        const ratio = width / height;
+        preview.dataset.geometryKey = geometryKey;
+        preview.dataset.sourceAspectRatio = String(ratio);
+        return ratio;
+    } finally {
+        if (appendedProbe) measuredCard.remove();
+        else measuredCard.className = originalClassName;
+    }
+}
+
+function clampImagePosition(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 50;
+    return Math.min(100, Math.max(0, numericValue));
+}
+
+function parseImagePosition(position) {
+    const [rawX = 50, rawY = 50] = String(position || '50,50').split(',');
+    return [clampImagePosition(rawX), clampImagePosition(rawY)];
+}
+
+function updateCardPreviewImageMetrics(preview, imageSource) {
+    const source = String(imageSource || '').trim();
+    if (preview.__portalAtlasImageSource === source) {
+        updateImagePositionButtonsState();
+        return;
+    }
+
+    preview.__portalAtlasImageSource = source;
+    preview.__portalAtlasImageRatio = 0;
+    const loadVersion = (preview.__portalAtlasImageLoadVersion || 0) + 1;
+    preview.__portalAtlasImageLoadVersion = loadVersion;
+
+    if (!source) {
+        updateImagePositionButtonsState();
+        return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+        if (preview.__portalAtlasImageLoadVersion !== loadVersion) return;
+        preview.__portalAtlasImageRatio = image.naturalWidth > 0 && image.naturalHeight > 0
+            ? image.naturalWidth / image.naturalHeight
+            : 0;
+        updateImagePositionButtonsState();
+    };
+    image.onerror = () => {
+        if (preview.__portalAtlasImageLoadVersion !== loadVersion) return;
+        preview.__portalAtlasImageRatio = 0;
+        updateImagePositionButtonsState();
+    };
+    image.src = source;
+    updateImagePositionButtonsState();
+}
+
+function getCardPreviewImageGeometry() {
+    const preview = document.getElementById('card-preview');
+    const backgroundSizeInput = document.getElementById('card-background-size');
+    const imageRatio = Number(preview?.__portalAtlasImageRatio) || 0;
+    const backgroundSize = Number.parseFloat(backgroundSizeInput?.value);
+    const containerWidth = preview?.clientWidth || 0;
+    const containerHeight = preview?.clientHeight || 0;
+
+    if (imageRatio <= 0 || backgroundSize <= 0 || containerWidth <= 0 || containerHeight <= 0) {
+        return null;
+    }
+
+    const imageWidth = containerWidth * backgroundSize / 100;
+    const imageHeight = imageWidth / imageRatio;
+    return {
+        horizontalTravel: containerWidth - imageWidth,
+        verticalTravel: containerHeight - imageHeight
+    };
+}
+
+function getImagePositionDelta(direction, geometry, step = 5) {
+    if (!geometry) return 0;
+    const horizontal = direction === 'left' || direction === 'right';
+    const travel = horizontal ? geometry.horizontalTravel : geometry.verticalTravel;
+    if (!Number.isFinite(travel) || Math.abs(travel) < 0.5) return 0;
+
+    const desiredPixelDirection = direction === 'right' || direction === 'down' ? 1 : -1;
+    return Math.sign(travel) * desiredPixelDirection * step;
+}
+
+function updateImagePositionButtonsState() {
+    const imageInput = document.getElementById('card-background-image');
+    if (!imageInput) return;
+
+    const [x, y] = parseImagePosition(imageInput.dataset.position);
+    const geometry = getCardPreviewImageGeometry();
+    document.querySelectorAll('.btn-image-position').forEach(button => {
+        const direction = button.dataset.direction;
+        const currentPosition = direction === 'left' || direction === 'right' ? x : y;
+        const delta = getImagePositionDelta(direction, geometry);
+        button.disabled = delta === 0
+            || clampImagePosition(currentPosition + delta) === currentPosition;
+    });
 }
 
 function adjustImagePosition(direction) {
     const imageInput = document.getElementById('card-background-image');
     const positionDisplay = document.querySelector('.position-values');
-    const backgroundSize = parseInt(document.getElementById('card-background-size').value, 10);
     if (!imageInput || !positionDisplay) return;
 
-    let [x, y] = imageInput.dataset.position
-        ? imageInput.dataset.position.split(',').map(Number)
-        : [50, 50];
-    const step = 5;
-    const inverted = backgroundSize > 100;
+    let [x, y] = parseImagePosition(imageInput.dataset.position);
+    const delta = getImagePositionDelta(direction, getCardPreviewImageGeometry());
+    if (delta === 0) return;
 
     switch (direction) {
         case 'up':
-            y = Math.max(0, y - (inverted ? -step : step));
+        case 'down':
+            y = clampImagePosition(y + delta);
             break;
         case 'right':
-            x = Math.min(100, x + (inverted ? -step : step));
-            break;
-        case 'down':
-            y = Math.min(100, y + (inverted ? -step : step));
-            break;
         case 'left':
-            x = Math.max(0, x + (inverted ? step : -step));
+            x = clampImagePosition(x + delta);
             break;
     }
 

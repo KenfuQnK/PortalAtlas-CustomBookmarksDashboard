@@ -53,6 +53,8 @@ function setupPopupForm() {
         await loadWrapperSelect();
         if (formGeneration !== cardFormImageState.generation) return;
         popupForm.style.display = 'block';
+        clearCardPreviewDimensions();
+        updateCardPreview();
     });
 
     deleteCardBtn.addEventListener('click', async () => {
@@ -77,6 +79,10 @@ function setupPopupForm() {
     colorInput.addEventListener('input', updateCardPreview);
     sizeInput.addEventListener('input', () => {
         document.getElementById('card-background-size-value').textContent = `${sizeInput.value}%`;
+        updateCardPreview();
+    });
+    document.getElementById('card-wrapper').addEventListener('change', () => {
+        clearCardPreviewDimensions();
         updateCardPreview();
     });
 
@@ -164,7 +170,7 @@ function resetSelectedImage() {
 
 async function openEditPopup(cardData) {
     cardFormImageState.reset();
-    captureCardPreviewDimensions(cardData.id, cardData.size);
+    clearCardPreviewDimensions();
     const formGeneration = cardFormImageState.generation;
     await loadWrapperSelect();
     if (formGeneration !== cardFormImageState.generation) return;
@@ -388,7 +394,7 @@ async function resetCardForm() {
 }
 
 function setPositionDisplay(position) {
-    const [x, y] = String(position || '50,50').split(',');
+    const [x, y] = parseImagePosition(position);
     const imageInput = document.getElementById('card-background-image');
     imageInput.dataset.position = `${x},${y}`;
     const [horizontalDiv, verticalDiv] = document.querySelector('.position-values').children;

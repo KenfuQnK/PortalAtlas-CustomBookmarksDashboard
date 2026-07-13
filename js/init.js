@@ -36,23 +36,32 @@ document.addEventListener("DOMContentLoaded", async function() {
         });
 
         let remoteRenderScheduled = false;
+        let pendingDashboardRender = false;
+        const pendingDriveImageIds = new Set();
+        const scheduleRemoteRender = () => {
+            if (remoteRenderScheduled) return;
+            remoteRenderScheduled = true;
+            requestAnimationFrame(async () => {
+                remoteRenderScheduled = false;
+                const renderDashboard = pendingDashboardRender;
+                const imageIds = new Set(pendingDriveImageIds);
+                pendingDashboardRender = false;
+                pendingDriveImageIds.clear();
+
+                if (renderDashboard) await renderWrappers();
+                if (imageIds.size > 0) await renderCards({ forceImageIds: imageIds });
+            });
+        };
+
         window.addEventListener('portal-atlas-data-changed', () => {
             driveSync.notifyDataChanged();
-            if (remoteRenderScheduled) return;
-            remoteRenderScheduled = true;
-            requestAnimationFrame(async () => {
-                remoteRenderScheduled = false;
-                await renderWrappers();
-            });
+            pendingDashboardRender = true;
+            scheduleRemoteRender();
         });
 
-        window.addEventListener('portal-atlas-drive-images-changed', () => {
-            if (remoteRenderScheduled) return;
-            remoteRenderScheduled = true;
-            requestAnimationFrame(async () => {
-                remoteRenderScheduled = false;
-                await renderWrappers();
-            });
+        window.addEventListener('portal-atlas-drive-images-changed', event => {
+            (event.detail?.cardIds || []).forEach(cardId => pendingDriveImageIds.add(cardId));
+            scheduleRemoteRender();
         });
 
     } catch (error) {

@@ -225,10 +225,12 @@
 
   #card-preview {
     position: relative;
-    /*transform-origin: center;
-    transform: scale(0.8);*/
-    transition: all 0.3s ease;
+    transition: box-shadow .2s;
     margin: 0;
+  }
+
+  #card-preview:hover {
+    transform: none;
   }
   
   #card-preview.card-small {
@@ -237,13 +239,13 @@
   }
   
   #card-preview.card-wide {
-    width: 240px;
+    width: 250px;
     height: 120px;
   }
   
   #card-preview.card-big {
-    width: 240px;
-    height: 240px;
+    width: 250px;
+    height: 250px;
   }
 
   .section-select {
@@ -566,6 +568,13 @@
   
   .btn-image-position:active {
     background-color: #d0d0d0;
+  }
+
+  .btn-image-position:disabled,
+  .btn-image-position:disabled:hover {
+    opacity: .45;
+    background-color: #f0f0f0;
+    cursor: not-allowed;
   }
 
   .btn-visibility .icon-visible {
